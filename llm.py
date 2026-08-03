@@ -102,8 +102,10 @@ def chat(messages, temperature=0.7):
         "messages": messages,
         "temperature": temperature,
         # deepseek-v4-flash 是推理模型: reasoning_content 会占 token 配额,
-        # 1200 会被思考吃光导致 content 为空, 调大留给正式输出
-        "max_tokens": 4096,
+        # 4096 会被思考吃光导致 content 为空; 调大到 8192 并限制推理强度
+        # (reasoning_effort=low), 保证正式输出有足够空间 (finish_reason=stop)
+        "max_tokens": 8192,
+        "reasoning_effort": "low",
         "stream": False,
     }
     req = urllib.request.Request(
@@ -130,9 +132,10 @@ def chat(messages, temperature=0.7):
         raise LLMError(f"DeepSeek API 返回格式异常: {str(body)[:300]}") from None
 
 
-def chat_with_retry(messages, temperature=0.7, attempts=3, backoff=1.0):
+def chat_with_retry(messages, temperature=0.7, attempts=4, backoff=1.0):
     """chat() 的容错封装: DeepSeek 偶发返回空 content / 瞬时失败时自动重试。
 
+    指数退避: 第 i 次重试前等待 backoff * 2^i 秒 (默认 1s, 2s, 4s)。
     返回非空文本; 重试耗尽后抛 LLMError。
     """
     import time
@@ -143,12 +146,12 @@ def chat_with_retry(messages, temperature=0.7, attempts=3, backoff=1.0):
         except LLMError as e:
             last_err = e
             if i < attempts - 1:
-                time.sleep(backoff)
+                time.sleep(backoff * (2 ** i))
                 continue
             raise
         if text and text.strip():
             return text
-        last_err = LLMError("DeepSeek 模型返回了空内容")
+        last_err = LLMError(f"DeepSeek model returned empty content (attempt {i + 1}/{attempts})")
         if i < attempts - 1:
-            time.sleep(backoff)
+            time.sleep(backoff * (2 ** i))
     raise last_err

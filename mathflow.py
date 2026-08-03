@@ -27,7 +27,8 @@ Lean 编译验证, 通过则写入会话继续下一题, 失败则 AI 针对错�
 
 示例:
     > :check
-    ... example (a b : Nat) : a + b = b + a := Nat.add_comm a b
+    ... example (a b : Nat) : a + b = b + a := by
+    ...   exact Nat.add_comm a b
     ... --END
     ✅ 验证通过 — 已加入会话
 """
@@ -181,10 +182,13 @@ Requirements:
 1. Explanation: in English, 150-300 words, conceptually accurate, aimed at a learner who can program and is new to Lean.
 2. Question: in English, state the exact mathematical proposition to prove and ask the learner to pick the correct Lean proof from the options (or write their own).
 3. Hint: give the Lean skeleton (proposition form, needed variables/premises) and a proof-strategy direction (which Mathlib lemmas may help, whether induction is needed). Never reveal which option is correct and never write the full proof.
-4. Keep propositions simple: provable in one or two proof steps; prefer existing Mathlib lemmas (e.g. Nat.add_comm, Nat.add_assoc); avoid custom definitions.
-5. Options: output 3-4 options as a JSON array "options": [{"label": "A", "code": "<Lean code>"}, ...]. Exactly ONE option is a complete, correct, compilable Lean proof of the stated proposition. The others must be TYPICAL MISTAKES that FAIL to compile: wrong lemma name, wrong argument order, missing variables, wrong proposition shape, wrong tactic (e.g. rfl where induction is needed), syntax errors, etc. Never use "sorry" or "admit" in any option (they compile but are not real proofs). Inside "code" strings, escape newlines as \\n and quotes as \\".
-6. "answer": the 0-based index of the correct option inside "options". Server-side only: never mention it in the question, hint, or explanation.
-7. Output ONLY one JSON object. No Markdown fences, no extra text.
+4. Keep propositions simple: provable in one or two proof steps; prefer existing Mathlib lemmas (e.g. Nat.add_comm, Nat.add_assoc); avoid custom definitions. Before choosing a proposition, be confident the exact Mathlib lemma names and the proof compile in Lean 4; if unsure about the proposition or the lemmas, pick a simpler, well-known proposition (e.g. basic Nat properties like commutativity/associativity, mul_one, List length lemmas).
+5. Options: output 3-4 options as a JSON array "options": [{"label": "A", "code": "<Lean code>"}, ...]. Every "code" MUST be a COMPLETE, self-contained, compilable Lean block: a full proposition statement (an `example` or `theorem` declaration with all variables/premises and the goal) followed by its proof. NEVER output a bare proof fragment like "by exact ..." — the server compiles the code directly, and a fragment without the proposition statement fails with "unexpected token; expected command". Correct option example:
+   example (a b : Nat) : a + b = b + a := by
+     exact Nat.add_comm a b
+6. Exactly ONE option must compile successfully (verified against "import Mathlib"). The other options must be TYPICAL LEARNER MISTAKES that FAIL to compile: wrong lemma name, wrong argument order, missing variables/premises, wrong proposition shape (e.g. proving a + b = a + b instead of a + b = b + a), wrong tactic for the goal (e.g. rfl where induction is needed), syntax errors, etc. Wrong options must NEVER be valid-but-differently-written proofs of the same proposition: watch out for symmetric/commutative goals (e.g. a + b = b + a) where swapping the arguments of a commutative lemma (Nat.add_comm b a) still compiles — do not use such variants as wrong options. Never use "sorry" or "admit" in any option (they compile but are not real proofs). Inside "code" strings, escape newlines as \\n and quotes as \\".
+7. "answer": the 0-based index of the correct option inside "options". Server-side only: never mention it in the question, hint, or explanation.
+8. Output ONLY one JSON object. No Markdown fences, no extra text.
 
 JSON format (fields exactly):
 {"title": "...", "explanation": "...", "question": "...", "hint": "...", "options": [{"label": "A", "code": "..."}, ...], "answer": <int>}"""
@@ -291,13 +295,31 @@ def generate_lesson(goal: str, last_proven: str = ""):
         {"role": "user", "content": f"Learning goal: {goal}{extra}"},
     ]
     # Double fault tolerance: chat_with_retry covers empty responses; retry all when parse degrades (non-JSON)
+    lesson = None
     for _ in range(3):
         try:
             text = llm.chat_with_retry(msgs, temperature=0.7, attempts=2)
         except llm.LLMError as e:
             print(f"⚠️  {e}")
-            return None
+            continue
         lesson = parse_lesson(text)
+        if "options" in lesson:
+            # Compile self-check gate: the model's claimed "answer" is not trusted.
+            # Only lessons where exactly one option compiles are usable.
+            ok_indices = [
+                i for i, opt in enumerate(lesson["options"])
+                if compile_check(opt["code"], "")[0]
+            ]
+            if len(ok_indices) == 1:
+                lesson["answer"] = ok_indices[0]
+            elif len(ok_indices) == 0:
+                print("⚠️  No option compiled — regenerating.")
+                lesson = None
+                continue
+            else:
+                print("⚠️  Multiple options compiled — regenerating.")
+                lesson = None
+                continue
         if lesson.get("title") and "(AI provided no explanation)" not in (lesson.get("explanation") or ""):
             return lesson
     return lesson
