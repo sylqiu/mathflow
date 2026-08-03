@@ -1,0 +1,24 @@
+# Lean / Lake
+.lake/
+build/
+*.olean
+
+# Python
+__pycache__/
+*.pyc
+/tmp/pycache/
+
+# 会话与临时文件
+sessions/
+.tmp_check.lean
+
+# 环境与密钥 (绝不提交)
+.env
+*.env
+DEEPSEEK_API_KEY*
+
+# macOS
+.DS_Store
+
+# 本地日志
+*.log
