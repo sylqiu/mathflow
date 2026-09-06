@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MathFlow · Admin</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --fg:#e6e9ef; --dim:#8b93a3;
+          --green:#3fb96f; --red:#e05555; --blue:#5b9dff; --amber:#ffb450;
+          --mono:ui-monospace,Menlo,Consolas,monospace; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; min-height:100%; }
+  body { background:var(--bg); color:var(--fg); font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  a { color:var(--blue); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  #topbar { position:sticky; top:0; z-index:40; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+            padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--line); }
+  #topbar .brand { font-weight:700; font-size:15px; margin-right:6px; }
+  #topbar .spacer { flex:1; }
+  #topbar a.btn, #topbar button.btn { font-size:13px; }
+  #main { max-width:980px; margin:0 auto; padding:22px 18px 80px; }
+  .loading { color:var(--dim); padding:30px 4px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:14px; }
+  .badge { display:inline-block; font-size:11px; border:1px solid var(--line); border-radius:20px; padding:1px 10px; color:var(--dim); }
+  .badge.ok { color:#c9f2d8; border-color:var(--green); background:rgba(63,185,111,.12); }
+  .badge.err { color:#f6d0d0; border-color:var(--red); background:rgba(224,85,85,.12); }
+  .badge.warn { color:#ffe3b0; border-color:var(--amber); background:rgba(255,180,80,.10); }
+  .lbl { font-size:12px; color:var(--dim); margin:26px 0 8px; text-transform:uppercase; letter-spacing:.5px; }
+  .sub { color:var(--dim); font-size:13px; margin:4px 0 12px; }
+  .h1 { font-size:24px; margin:8px 0 4px; }
+  .dim { color:var(--dim); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .col { display:flex; flex-direction:column; gap:6px; }
+  .btn { background:#1d2635; color:var(--fg); border:1px solid var(--line); border-radius:8px;
+         padding:6px 14px; cursor:pointer; font-size:13.5px; display:inline-flex; align-items:center; gap:6px; }
+  .btn:hover:not(:disabled) { border-color:var(--blue); }
+  .btn:disabled { opacity:.6; cursor:default; }
+  .btn.primary { background:var(--blue); color:#0c0e12; border-color:var(--blue); font-weight:600; }
+  .btn.danger { color:#f6d0d0; }
+  .btn.danger:hover:not(:disabled) { border-color:var(--red); }
+  .btn.small { padding:3px 9px; font-size:12px; }
+  input[type=text], input[type=url], input[type=password], select, textarea {
+    background:#0c0e12; color:var(--fg); border:1px solid var(--line); border-radius:8px;
+    padding:7px 10px; font-size:13.5px; font-family:inherit; width:100%; }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--blue); }
+  textarea.mono, .mono { font-family:var(--mono); font-size:12.5px; }
+  label { font-size:12.5px; color:var(--dim); display:block; margin:10px 0 4px; }
+  .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:0 14px; }
+  .tabs { display:flex; gap:6px; border-bottom:1px solid var(--line); margin:14px 0 18px; }
+  .tab { background:none; border:none; color:var(--dim); font-size:13.5px; padding:8px 14px; cursor:pointer;
+         border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .tab.active { color:var(--fg); border-bottom-color:var(--blue); }
+  .status { font-size:13px; margin-top:10px; min-height:18px; }
+  .status.ok { color:#c9f2d8; }
+  .status.err { color:#f6d0d0; }
+  .err-box, .warn-box, .ok-box { border-radius:8px; padding:10px 12px; margin:10px 0; font-size:13px; }
+  .err-box { background:rgba(224,85,85,.10); border:1px solid var(--red); color:#f6d0d0; }
+  .warn-box { background:rgba(255,180,80,.08); border:1px solid var(--amber); color:#ffe3b0; }
+  .ok-box { background:rgba(63,185,111,.10); border:1px solid var(--green); color:#c9f2d8; }
+  .err-box ul, .warn-box ul { margin:6px 0 0; padding-left:18px; }
+  .course-card h3 { margin:0 0 2px; font-size:17px; }
+  .course-card .meta { color:var(--dim); font-size:13px; margin:2px 0 10px; }
+  .course-card .actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .module { border:1px solid var(--line); border-radius:10px; padding:12px; margin:10px 0; background:#14171d; }
+  .module-head { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .module-head input { flex:1; min-width:140px; }
+  .lesson-row { display:flex; gap:8px; align-items:center; padding:6px 4px; border-top:1px dashed var(--line); }
+  .lesson-row:first-child { border-top:none; }
+  .lesson-row .lid { flex:1; cursor:pointer; }
+  .lesson-row .lid:hover { color:var(--blue); }
+  .kind-tag { font-size:10.5px; color:var(--dim); border:1px solid var(--line); border-radius:10px; padding:0 8px; }
+  .add-lesson { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .add-lesson input { flex:1; min-width:130px; }
+  .add-lesson select { width:auto; }
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:860px){ .split { grid-template-columns:1fr; } }
+  .body-textarea { min-height:340px; resize:vertical; font-family:var(--mono); font-size:13px; line-height:1.55; }
+  .preview { border:1px solid var(--line); border-radius:10px; padding:12px 16px; background:#10131a; min-height:340px; }
+  .preview h2 { font-size:19px; margin:22px 0 10px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  .preview h3 { font-size:16px; margin:18px 0 8px; }
+  .preview p { margin:10px 0; }
+  .preview code { background:#0c0e12; border:1px solid var(--line); border-radius:5px; padding:1px 6px;
+                  font-family:var(--mono); font-size:12.5px; color:#a8c7fa; }
+  .preview strong { color:#fff; }
+  .preview blockquote { margin:10px 0; padding:8px 14px; border-left:3px solid var(--blue);
+                        background:#10131a; border-radius:0 8px 8px 0; color:var(--dim); }
+  .box { border-radius:10px; padding:12px 14px; margin:14px 0; border:1px solid var(--line); border-left:4px solid; }
+  .box-label { font-size:11px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; margin-bottom:4px; }
+  .box-title { font-size:15px; font-weight:700; margin-bottom:8px; color:#fff; }
+  .def-box { background:rgba(91,157,255,.07); border-left-color:var(--blue); }
+  .def-box .box-label { color:var(--blue); }
+  .thm-box { background:rgba(217,168,255,.07); border-left-color:#d9a8ff; }
+  .thm-box .box-label { color:#d9a8ff; }
+  .proof-box { background:rgba(63,185,111,.06); border-left-color:var(--green); }
+  .proof-box .box-label { color:var(--green); }
+  .con-box { background:rgba(255,180,80,.07); border-left-color:#ffb450; }
+  .con-box .box-label { color:#ffb450; }
+  .ex-box { background:rgba(255,180,80,.05); border-left-color:#ffb450; }
+  .ex-box .box-label { color:#ffb450; }
+  .rem-box { background:rgba(139,147,163,.07); border-left-color:var(--dim); }
+  .rem-box .box-label { color:var(--dim); }
+  .chip { display:inline-block; background:#1d2635; color:var(--blue); border:1px solid #31415c;
+          border-radius:12px; padding:0 9px; font-size:12.5px; cursor:pointer; margin:0 2px; }
+  .chip:hover { border-color:var(--blue); }
+  .chip-thm { color:#d9a8ff; border-color:#4a3a63; }
+  .json-block { margin:16px 0; }
+  .json-block .json-head { display:flex; gap:8px; align-items:center; margin-bottom:6px; }
+  .json-block .json-head .jname { font-size:13px; font-weight:600; flex:1; }
+  .json-block textarea { min-height:120px; resize:vertical; font-family:var(--mono); font-size:12px; line-height:1.5; }
+  .media-list li { display:flex; gap:8px; align-items:center; padding:6px 0; border-bottom:1px dashed var(--line); }
+  .media-list .fname { flex:1; font-family:var(--mono); font-size:12.5px; word-break:break-all; }
+  .modal-back { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:60; display:flex;
+                align-items:flex-start; justify-content:center; padding:60px 16px; }
+  .modal { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px; width:100%;
+           max-width:520px; box-shadow:0 16px 48px rgba(0,0,0,.5); }
+  .modal h3 { margin:0 0 10px; font-size:16px; }
+  .modal .actions { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
+  .hidden { display:none !important; }
+  .back { font-size:13px; display:inline-block; margin-bottom:10px; }
+  .lesson-top { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .lesson-top .t { flex:1; }
+  .hint-msg { font-size:12.5px; color:var(--dim); margin-top:4px; }
+  .pop-name { font-size:15px; font-weight:700; margin:6px 0; color:var(--blue); }
+  .pop-kind { font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.5px; }
+  .btn.active { border-color:var(--blue); box-shadow:inset 0 0 0 1px var(--blue); }
+  .btn.active.dec-do, .badge.dec-do { color:#c9f2d8; border-color:var(--green);
+    background:rgba(63,185,111,.12); box-shadow:inset 0 0 0 1px var(--green); }
+  .btn.active.dec-dont, .badge.dec-dont { color:#f6d0d0; border-color:var(--red);
+    background:rgba(224,85,85,.12); box-shadow:inset 0 0 0 1px var(--red); }
+  .btn.active.dec-revise, .badge.dec-revise { color:#ffe3b0; border-color:var(--amber);
+    background:rgba(255,180,80,.10); box-shadow:inset 0 0 0 1px var(--amber); }
+  .review-block-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px; }
+  .review-block-title { font-size:16px; font-weight:700; }
+  .comment { border-top:1px dashed var(--line); padding:6px 0 2px; }
+  .comment:first-child { border-top:none; }
+  .comment-text { font-size:13.5px; }
+  .comment-at { font-size:11px; color:var(--dim); }
+  .comment-input { flex:1; min-width:180px; }
+</style>
+</head>
+<body>
+<header id="topbar">
+  <span class="brand">MathFlow Admin</span>
+  <a class="btn" href="/" target="_blank" rel="noopener">Open Player</a>
+  <a class="btn" href="#/new">New Course</a>
+  <a class="btn" href="#/reviews">Reviews</a>
+  <a class="btn" href="#/import">Import Package</a>
+  <span class="spacer"></span>
+  <button class="btn small" id="token-btn" type="button" title="Set or clear the X-Admin-Token sent with admin API calls">Token: off</button>
+</header>
+<main id="main"><div class="loading">Loading…</div></main>
+
+<div id="token-modal" class="modal-back hidden">
+  <div class="modal">
+    <h3>Admin token</h3>
+    <p class="sub">Stored in this browser (localStorage) and sent as <code class="mono">X-Admin-Token</code> on admin API calls. Leave empty and save to clear.</p>
+    <input type="password" id="token-input" placeholder="MATHFLOW_ADMIN_TOKEN value" autocomplete="off">
+    <div class="actions">
+      <button class="btn" id="token-clear" type="button">Clear</button>
+      <span class="spacer" style="flex:1"></span>
+      <button class="btn" id="token-cancel" type="button">Cancel</button>
+      <button class="btn primary" id="token-save" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="chip-modal" class="modal-back hidden">
+  <div class="modal">
+    <div class="pop-kind" id="chip-kind"></div>
+    <div class="pop-name" id="chip-name"></div>
+    <div class="preview" id="chip-statement" style="min-height:0; border:none; padding:0; background:none;"></div>
+    <div class="actions">
+      <button class="btn" id="chip-close" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ---------------- state + token ---------------- */
+const state = { courses: [], manifest: null, lesson: null, tab: 'lessons', previewTimer: null, mediaList: null };
+let token = '';
+try { token = localStorage.getItem('mf-admin-token') || ''; } catch (e) {}
+const $ = sel => document.querySelector(sel);
+const mainEl = () => $('#main');
+const apiBase = '/api/admin';
+const KINDS = ['theory', 'media', 'checkpoint', 'mcq', 'exercise'];
+const KIND_LABEL = { theory:'Theory', media:'Media', checkpoint:'Checkpoint', mcq:'MCQ', exercise:'Exercise' };
+const REVIEW_KINDS = ['plan', 'lesson-draft', 'course-draft'];
+const REVIEW_KIND_LABEL = { plan:'Plan', 'lesson-draft':'Lesson draft', 'course-draft':'Course draft' };
+const DEC_LABEL = { do:'Do', dont:'Don\'t', revise:'Revise' };
+
+function esc(s){
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function uid(prefix){ return prefix + '-' + Math.random().toString(36).slice(2, 8); }
+
+/* ---------------- fetch wrapper with admin token + 403 retry ---------------- */
+async function adminFetch(path, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({}, opts.headers || {});
+  if (token) opts.headers['X-Admin-Token'] = token;
+  let res = await fetch(path, opts);
+  if (res.status === 403 && !opts._retried){
+    const t = await promptToken('The server rejected the admin token. Enter a valid token to retry.');
+    if (t === null) return res;
+    token = t;
+    opts = Object.assign({}, opts, {_retried: true});
+    opts.headers = Object.assign({}, opts.headers, {'X-Admin-Token': t});
+    res = await fetch(path, opts);
+  }
+  return res;
+}
+async function api(path, opts){
+  const res = await adminFetch(path, opts);
+  const ct = res.headers.get('content-type') || '';
+  let body;
+  try { body = ct.includes('json') ? await res.json() : await res.text(); }
+  catch (e) { body = null; }
+  if (!res.ok){
+    const err = new Error((body && body.error) || ('HTTP ' + res.status));
+    err.status = res.status; err.body = body;
+    throw err;
+  }
+  return body;
+}
+function postJson(path, data){
+  return api(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+}
+function putJson(path, data){
+  return api(path, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+}
+
+/* ---------------- token prompt ---------------- */
+function promptToken(message){
+  return new Promise(resolve => {
+    const modal = $('#token-modal');
+    const input = $('#token-input');
+    const note = document.createElement('p');
+    note.className = 'hint-msg';
+    note.textContent = message || '';
+    modal.querySelector('h3').after(note);
+    modal.classList.remove('hidden');
+    input.value = token;
+    input.focus();
+    const done = v => { modal.classList.add('hidden'); note.remove(); resolve(v); };
+    $('#token-save').onclick = () => { const v = input.value.trim(); token = v; try { localStorage.setItem('mf-admin-token', v); } catch(e){} updateTokenBtn(); done(v); };
+    $('#token-clear').onclick = () => { token = ''; try { localStorage.removeItem('mf-admin-token'); } catch(e){} updateTokenBtn(); done(''); };
+    $('#token-cancel').onclick = () => done(null);
+    input.onkeydown = e => { if (e.key === 'Enter') $('#token-save').click(); if (e.key === 'Escape') $('#token-cancel').click(); };
+  });
+}
+function updateTokenBtn(){
+  const b = $('#token-btn');
+  if (b){ b.textContent = token ? 'Token: set' : 'Token: off'; b.style.color = token ? 'var(--green)' : ''; }
+}
+$('#token-btn') && ($('#token-btn').onclick = () => promptToken(''));
+document.getElementById('chip-close').addEventListener('click', () => $('#chip-modal').classList.add('hidden'));
+$('#chip-modal').addEventListener('click', e => { if (e.target.id === 'chip-modal') $('#chip-modal').classList.add('hidden'); });
+$('#token-modal').addEventListener('click', e => { if (e.target.id === 'token-modal') $('#token-modal').classList.add('hidden'); });
+
+/* ---------------- mini-markdown preview (mirrors player.html) ---------------- */
+function inlineMd(s){
+  const codes = [];
+  s = s.replace(/`([^`]+)`/g, (m, c) => { codes.push(c); return '\u0000' + (codes.length - 1) + '\u0000'; });
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/@(def|thm):([A-Za-z0-9._-]+)/g,
+    '<span class="chip chip-$1" data-ref="$1" data-id="$2" title="Click to open">@$1:$2</span>');
+  s = s.replace(/\u0000(\d+)\u0000/g, (m, i) => '<code>' + esc(codes[+i]) + '</code>');
+  return s;
+}
+const BOX_KINDS = {def:'def', thm:'thm', proof:'proof', con:'con', ex:'ex', rem:'rem'};
+const BOX_LABELS = {def:'Definition', thm:'Theorem', proof:'Proof', con:'Construction', ex:'Example', rem:'Remark'};
+function boxFor(kindClass, label, title, body){
+  return '<div class="box ' + kindClass + '-box"><div class="box-label">' + esc(label || '') + '</div>'
+    + (title ? '<div class="box-title">' + esc(title) + '</div>' : '')
+    + '<div class="box-body">' + body + '</div></div>';
+}
+function blocksToHtml(lines){
+  let html = '', para = [], list = null;
+  const flushPara = () => { if (para.length){ html += '<p>' + inlineMd(esc(para.join('\n'))) + '</p>'; para = []; } };
+  const flushList = () => {
+    if (list){ html += '<' + list.tag + '>' + list.items.map(it => '<li>' + inlineMd(esc(it)) + '</li>').join('') + '</' + list.tag + '>'; list = null; }
+  };
+  for (const raw of lines){
+    const t = raw.trim();
+    if (!t){ flushPara(); flushList(); continue; }
+    const bq = t.match(/^> ?(.*)$/);
+    if (bq){ flushPara(); flushList(); html += '<blockquote>' + inlineMd(esc(bq[1])) + '</blockquote>'; continue; }
+    const li = t.match(/^[-*] (.*)$/);
+    if (li){ flushPara(); if (!list) list = {tag:'ul', items:[]}; list.items.push(li[1]); continue; }
+    const oli = t.match(/^\d+\.\s+(.*)$/);
+    if (oli){ flushPara(); if (!list) list = {tag:'ol', items:[]}; list.items.push(oli[1]); continue; }
+    flushList();
+    para.push(t);
+  }
+  flushPara();
+  flushList();
+  return html;
+}
+function mdToHtml(md){
+  const lines = String(md || '').split('\n');
+  let html = '', i = 0;
+  while (i < lines.length){
+    const t = lines[i].trim();
+    if (!t){ i++; continue; }
+    const fence = t.match(/^:::(def|thm|proof|con|ex|rem)\s*$/);
+    if (fence){
+      const kind = fence[1], inner = [];
+      i++;
+      while (i < lines.length && lines[i].trim() !== ':::'){ inner.push(lines[i]); i++; }
+      if (i < lines.length) i++;
+      html += boxFor(BOX_KINDS[kind], BOX_LABELS[kind], '', blocksToHtml(inner));
+      continue;
+    }
+    const h = t.match(/^(#{2,4}) (.*)$/);
+    if (h){ const lvl = Math.min(h[1].length, 4); html += '<h' + lvl + '>' + inlineMd(esc(h[2])) + '</h' + lvl + '>'; i++; continue; }
+    const bq = t.match(/^> ?(.*)$/);
+    if (bq){ html += '<blockquote>' + inlineMd(esc(bq[1])) + '</blockquote>'; i++; continue; }
+    const liMatch = t.match(/^([-*]|\d+\.)\s+(.*)$/);
+    if (liMatch){
+      const ordered = /^\d+\./.test(liMatch[1]);
+      const items = [liMatch[2]];
+      i++;
+      while (i < lines.length){
+        const n = lines[i].trim().match(/^([-*]|\d+\.)\s+(.*)$/);
+        if (!n) break;
+        items.push(n[2]); i++;
+      }
+      html += '<' + (ordered ? 'ol' : 'ul') + '>' + items.map(it => '<li>' + inlineMd(esc(it)) + '</li>').join('') + '</' + (ordered ? 'ol' : 'ul') + '>';
+      continue;
+    }
+    const para = [t];
+    i++;
+    while (i < lines.length && lines[i].trim() && !/^(#{2,4} |:::|[-*>] |\d+\. )/.test(lines[i])){ para.push(lines[i]); i++; }
+    html += '<p>' + inlineMd(esc(para.join('\n'))) + '</p>';
+  }
+  return html;
+}
+function renderMath(root){
+  if (window.renderMathInElement){
+    try {
+      renderMathInElement(root, {
+        delimiters: [ {left:'$$', right:'$$', display:true}, {left:'$', right:'$', display:false} ],
+        throwOnError:false
+      });
+    } catch (e) {}
+  }
+}
+function renderPreview(html){
+  const pv = $('#lesson-preview');
+  if (!pv) return;
+  pv.innerHTML = html;
+  renderMath(pv);
+}
+function parseJsonArr(text, name){
+  try {
+    const v = JSON.parse(text);
+    if (!Array.isArray(v)) throw new Error(name + ' must be a JSON array');
+    return {ok:true, value:v};
+  } catch (e){ return {ok:false, error:e.message}; }
+}
+function liveDefs(){
+  const el = $('#json-defs');
+  if (!el) return {defs: [], thms: []};
+  const d = parseJsonArr(el.value, 'defs');
+  const t = parseJsonArr($('#json-theorems').value, 'theorems');
+  return { defs: d.ok ? d.value : [], thms: t.ok ? t.value : [] };
+}
+function chipEntry(ref, id){
+  const pools = liveDefs();
+  const pool = ref === 'def' ? pools.defs : pools.thms;
+  return (pool || []).find(x => x && (x.id === id || x.id === id.replace(/\.+$/, ''))) || null;
+}
+$('#main').addEventListener('click', e => {
+  const chip = e.target.closest('.chip[data-ref]');
+  if (!chip) return;
+  const entry = chipEntry(chip.dataset.ref, chip.dataset.id);
+  if (!entry){ return; }
+  $('#chip-kind').textContent = chip.dataset.ref === 'def' ? 'Definition' : 'Theorem';
+  $('#chip-name').textContent = entry.name || entry.id || '';
+  const st = $('#chip-statement');
+  st.innerHTML = inlineMd(esc(entry.statement || ''));
+  renderMath(st);
+  $('#chip-modal').classList.remove('hidden');
+});
+
+/* ---------------- course list ---------------- */
+async function viewHome(){
+  mainEl().innerHTML = '<div class="loading">Loading courses…</div>';
+  try {
+    state.courses = await api(apiBase + '/courses');
+  } catch (err){
+    mainEl().innerHTML = '<div class="err-box">' + esc(err.message) + '</div>';
+    return;
+  }
+  if (!state.courses.length){
+    mainEl().innerHTML = '<div class="card"><div class="h1">No courses yet</div>'
+      + '<p class="sub">Create a course or import a course package to get started.</p>'
+      + '<div class="row"><a class="btn primary" href="#/new">New Course</a><a class="btn" href="#/import">Import Package</a></div></div>';
+    return;
+  }
+  mainEl().innerHTML = '<div class="h1">Courses</div><p class="sub">' + state.courses.length + ' course(s)</p>'
+    + state.courses.map(c => courseCard(c)).join('');
+}
+function courseCard(c){
+  const v = c.validate || {errors:0, warnings:0};
+  const badge = v.errors > 0
+    ? '<span class="badge err">' + v.errors + ' error' + (v.errors === 1 ? '' : 's') + '</span>'
+    : (v.warnings > 0
+        ? '<span class="badge warn">OK · ' + v.warnings + ' warning' + (v.warnings === 1 ? '' : 's') + '</span>'
+        : '<span class="badge ok">OK</span>');
+  const updated = c.updated_at ? new Date(c.updated_at * 1000).toLocaleString() : '';
+  return '<div class="card course-card">'
+    + '<div class="row"><h3>' + esc(c.title || c.id) + '</h3> ' + badge + '</div>'
+    + (c.subtitle ? '<p class="meta">' + esc(c.subtitle) + '</p>' : '')
+    + '<p class="meta">' + esc(c.id) + ' · ' + c.lesson_count + ' lessons · ' + c.module_count + ' modules'
+    + (updated ? ' · updated ' + esc(updated) : '') + '</p>'
+    + '<div class="actions">'
+    + '<a class="btn" href="/#/course/' + encodeURIComponent(c.id) + '" target="_blank" rel="noopener">Open</a>'
+    + '<a class="btn" href="#/course/' + encodeURIComponent(c.id) + '">Edit</a>'
+    + '<button class="btn" type="button" data-act="validate-course" data-id="' + esc(c.id) + '">Validate</button>'
+    + '<button class="btn danger" type="button" data-act="del-course" data-id="' + esc(c.id) + '">Delete</button>'
+    + '</div></div>';
+}
+
+/* ---------------- new course ---------------- */
+function viewNew(){
+  mainEl().innerHTML = '<a class="back" href="#/">← Back to courses</a>'
+    + '<div class="h1">New Course</div><p class="sub">Creates data/courses/&lt;id&gt;/ with an empty manifest.</p>'
+    + '<div class="card col" style="max-width:560px">'
+    + '<label>ID (letters, digits, . _ -; must start with a letter or digit)</label><input type="text" id="nc-id" placeholder="e.g. calculus-101" autocomplete="off">'
+    + '<label>Title</label><input type="text" id="nc-title" placeholder="Calculus I" autocomplete="off">'
+    + '<label>Subtitle</label><input type="text" id="nc-subtitle" placeholder="Optional" autocomplete="off">'
+    + '<label>Source URL</label><input type="url" id="nc-source" placeholder="https://… (optional)" autocomplete="off">'
+    + '<div class="row" style="margin-top:12px"><button class="btn primary" id="nc-submit" type="button">Create Course</button><span class="status" id="nc-status"></span></div>'
+    + '</div>';
+  $('#nc-submit').onclick = async () => {
+    const id = $('#nc-id').value.trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)){ $('#nc-status').textContent = 'Invalid id.'; $('#nc-status').className = 'status err'; return; }
+    if (!$('#nc-title').value.trim()){ $('#nc-status').textContent = 'Title is required.'; $('#nc-status').className = 'status err'; return; }
+    $('#nc-submit').disabled = true;
+    try {
+      const course = await postJson(apiBase + '/courses', {
+        id: id,
+        title: $('#nc-title').value.trim(),
+        subtitle: $('#nc-subtitle').value.trim(),
+        source_url: $('#nc-source').value.trim(),
+      });
+      location.hash = '#/course/' + encodeURIComponent(course.id);
+    } catch (err){
+      $('#nc-status').textContent = err.message;
+      $('#nc-status').className = 'status err';
+      $('#nc-submit').disabled = false;
+    }
+  };
+}
+
+/* ---------------- import package ---------------- */
+function viewImport(){
+  mainEl().innerHTML = '<a class="back" href="#/">← Back to courses</a>'
+    + '<div class="h1">Import Course Package</div>'
+    + '<p class="sub">Upload a zip containing <code class="mono">manifest.json</code>, <code class="mono">lessons/*.json</code> and optional <code class="mono">media/audio/*</code>, <code class="mono">media/videos/*</code>. The package is validated server-side before publishing.</p>'
+    + '<div class="card col" style="max-width:560px">'
+    + '<label>Package zip</label><input type="file" id="imp-file" accept=".zip,application/zip">'
+    + '<label class="row" style="gap:8px"><input type="checkbox" id="imp-overwrite" style="width:auto"> Overwrite existing course with the same id</label>'
+    + '<div class="row" style="margin-top:12px"><button class="btn primary" id="imp-submit" type="button">Import</button><span class="status" id="imp-status"></span></div>'
+    + '<div id="imp-result"></div>'
+    + '</div>';
+  $('#imp-submit').onclick = async () => {
+    const file = $('#imp-file').files[0];
+    const status = $('#imp-status'), result = $('#imp-result');
+    status.textContent = ''; result.innerHTML = '';
+    if (!file){ status.textContent = 'Choose a zip file first.'; status.className = 'status err'; return; }
+    $('#imp-submit').disabled = true;
+    const fd = new FormData();
+    fd.append('file', file);
+    if ($('#imp-overwrite').checked) fd.append('overwrite', 'true');
+    try {
+      const out = await api(apiBase + '/import', {method:'POST', body: fd});
+      status.textContent = 'Imported ✓'; status.className = 'status ok';
+      result.innerHTML = '<div class="ok-box">'
+        + '<b>Course imported:</b> ' + esc(out.id)
+        + ' · ' + out.lessons + ' lessons'
+        + ' · audio ' + out.media.audio + ' · videos ' + out.media.videos
+        + (out.validate.warnings ? ' · ' + out.validate.warnings + ' warning(s)' : '')
+        + '<div class="row" style="margin-top:10px"><a class="btn" href="#/course/' + encodeURIComponent(out.id) + '">Edit course</a>'
+        + '<a class="btn" href="/#/course/' + encodeURIComponent(out.id) + '" target="_blank" rel="noopener">Open player</a></div></div>';
+    } catch (err){
+      status.textContent = err.message; status.className = 'status err';
+      const errors = err.body && (err.body.errors || (err.body.warnings ? null : null));
+      if (errors && errors.length){
+        result.innerHTML = '<div class="err-box">Validation failed:<ul>' + errors.map(e => '<li>' + esc(e) + '</li>').join('') + '</ul></div>';
+      }
+    } finally { $('#imp-submit').disabled = false; }
+  };
+}
+
+/* ---------------- course editor ---------------- */
+async function viewCourse(courseId){
+  mainEl().innerHTML = '<div class="loading">Loading course…</div>';
+  try {
+    state.manifest = await api(apiBase + '/courses/' + encodeURIComponent(courseId) + '/manifest');
+  } catch (err){
+    mainEl().innerHTML = '<div class="err-box">' + esc(err.message) + '</div>';
+    return;
+  }
+  state.courseId = courseId;
+  renderCourse();
+}
+function renderCourse(){
+  const m = state.manifest;
+  const id = state.courseId;
+  mainEl().innerHTML = '<a class="back" href="#/">← Courses</a>'
+    + '<div class="lesson-top"><div class="t"><div class="h1">' + esc(m.title || id) + '</div>'
+    + '<p class="sub">' + esc(id) + '</p></div>'
+    + '<a class="btn" href="/#/course/' + encodeURIComponent(id) + '" target="_blank" rel="noopener">Open player</a>'
+    + '<button class="btn danger" type="button" data-act="del-course" data-id="' + esc(id) + '">Delete course</button></div>'
+    + '<div class="card"><div class="lbl">Manifest</div>'
+    + '<div class="form-grid">'
+    + '<div><label>Title</label><input type="text" id="mf-title" value="' + esc(m.title || '') + '"></div>'
+    + '<div><label>Subtitle</label><input type="text" id="mf-subtitle" value="' + esc(m.subtitle || '') + '"></div>'
+    + '<div style="grid-column:1/-1"><label>Source URL</label><input type="url" id="mf-source" value="' + esc(m.source_url || '') + '"></div>'
+    + '</div>'
+    + '<div class="lbl">Modules</div><div id="module-list"></div>'
+    + '<div class="row" style="margin-top:12px">'
+    + '<button class="btn" type="button" data-act="add-module">+ Add module</button>'
+    + '<button class="btn primary" type="button" data-act="save-manifest">Save manifest</button>'
+    + '<span class="status" id="mf-status"></span></div></div>'
+    + '<div class="tabs">'
+    + '<button class="tab" data-act="tab" data-tab="lessons">Lessons</button>'
+    + '<button class="tab" data-act="tab" data-tab="media">Media</button>'
+    + '<button class="tab" data-act="tab" data-tab="validate">Validate</button>'
+    + '</div><div id="tab-body"></div>';
+  renderModuleList();
+  renderTab();
+}
+function renderModuleList(){
+  const wrap = $('#module-list');
+  const mods = (state.manifest.modules || []);
+  if (!mods.length){
+    wrap.innerHTML = '<p class="dim">No modules yet. Add one to start structuring the course.</p>';
+    return;
+  }
+  wrap.innerHTML = mods.map((mod, mi) => moduleHtml(mod, mi, mods.length)).join('');
+}
+function moduleHtml(mod, mi, total){
+  const lessons = (mod.lessons || []).map((ref, li, arr) => {
+    const lid = typeof ref === 'object' && ref ? ref.id : ref;
+    return '<div class="lesson-row" data-lid="' + esc(lid) + '">'
+      + '<span class="kind-tag">' + (arr.length - li) + '</span>'
+      + '<span class="lid" data-act="open-lesson" data-lid="' + esc(lid) + '">' + esc(lid) + '</span>'
+      + '<button class="btn small" type="button" data-act="mv-lesson" data-dir="-1" title="Move up">↑</button>'
+      + '<button class="btn small" type="button" data-act="mv-lesson" data-dir="1" title="Move down">↓</button>'
+      + '<button class="btn small" type="button" data-act="rm-lesson" data-lid="' + esc(lid) + '" title="Remove from manifest">Remove</button>'
+      + '<button class="btn small danger" type="button" data-act="del-lesson" data-lid="' + esc(lid) + '" title="Delete lesson file">Delete</button>'
+      + '</div>';
+  }).join('');
+  return '<div class="module" data-mi="' + mi + '">'
+    + '<div class="module-head">'
+    + '<input class="m-id" type="text" value="' + esc(mod.id || '') + '" placeholder="module id" autocomplete="off">'
+    + '<input class="m-title" type="text" value="' + esc(mod.title || '') + '" placeholder="Module title" autocomplete="off">'
+    + '<button class="btn small" type="button" data-act="mv-module" data-dir="-1" title="Move up">↑</button>'
+    + '<button class="btn small" type="button" data-act="mv-module" data-dir="1" title="Move down">↓</button>'
+    + '<button class="btn small danger" type="button" data-act="rm-module" title="Remove module">Remove</button>'
+    + '</div>'
+    + '<div class="module-lessons">' + lessons + '</div>'
+    + '<div class="add-lesson">'
+    + '<input class="new-lid" type="text" placeholder="lesson id" autocomplete="off">'
+    + '<select class="new-kind">' + KINDS.map(k => '<option value="' + k + '">' + KIND_LABEL[k] + '</option>').join('') + '</select>'
+    + '<input class="new-title" type="text" placeholder="Lesson title" autocomplete="off">'
+    + '<button class="btn small" type="button" data-act="add-lesson">Add lesson</button>'
+    + '</div></div>';
+}
+function collectManifest(){
+  const m = JSON.parse(JSON.stringify(state.manifest));
+  m.title = $('#mf-title').value.trim();
+  m.subtitle = $('#mf-subtitle').value.trim();
+  m.source_url = $('#mf-source').value.trim();
+  m.modules = [];
+  document.querySelectorAll('#module-list .module').forEach(el => {
+    const mid = el.querySelector('.m-id').value.trim();
+    m.modules.push({
+      id: mid,
+      title: el.querySelector('.m-title').value.trim(),
+      lessons: Array.from(el.querySelectorAll('.lesson-row')).map(r => ({id: r.dataset.lid})),
+    });
+  });
+  return m;
+}
+function tabBody(){
+  return $('#tab-body');
+}
+async function renderTab(){
+  const tab = state.tab;
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  const body = tabBody();
+  if (tab === 'lessons') renderLessonsTab(body);
+  else if (tab === 'media') renderMediaTab(body);
+  else renderValidateTab(body);
+}
+function renderLessonsTab(body){
+  const mods = state.manifest.modules || [];
+  if (!mods.length){ body.innerHTML = '<p class="dim">No modules — add a module above, then add lessons to it.</p>'; return; }
+  body.innerHTML = '<div class="lbl">Lessons by module</div>'
+    + mods.map((mod, mi) => {
+      const lessons = (mod.lessons || []).map(ref => {
+        const lid = typeof ref === 'object' && ref ? ref.id : ref;
+        return '<div class="lesson-row"><a class="lid" data-act="open-lesson" data-lid="' + esc(lid) + '">' + esc(lid) + '</a></div>';
+      }).join('');
+      return '<div class="module"><div class="mod-title">' + esc(mod.title || mod.id || ('Module ' + (mi + 1))) + '</div>'
+        + (lessons || '<p class="dim">No lessons</p>') + '</div>';
+    }).join('');
+}
+async function renderMediaTab(body){
+  body.innerHTML = '<div class="loading">Loading media…</div>';
+  try {
+    const list = await api(apiBase + '/courses/' + encodeURIComponent(state.courseId) + '/media');
+    state.mediaList = list;
+    body.innerHTML = '<div class="card"><div class="lbl">Upload</div>'
+      + '<div class="row"><input type="file" id="media-file" style="flex:1"><select id="media-kind"><option value="audio">audio</option><option value="videos">videos</option></select>'
+      + '<button class="btn primary" type="button" data-act="upload-media">Upload</button><span class="status" id="media-status"></span></div></div>'
+      + '<div class="lbl">Audio</div><ul class="media-list">' + mediaRows(list.audio, 'audio') + '</ul>'
+      + '<div class="lbl">Videos</div><ul class="media-list">' + mediaRows(list.videos, 'videos') + '</ul>';
+  } catch (err){
+    body.innerHTML = '<div class="err-box">' + esc(err.message) + '</div>';
+  }
+}
+function mediaRows(names, kind){
+  if (!names.length) return '<li class="dim">None</li>';
+  return names.map(n => '<li><span class="fname">' + esc(n) + '</span>'
+    + '<a class="btn small" href="/media/' + encodeURIComponent(state.courseId) + '/' + kind + '/' + encodeURIComponent(n) + '" target="_blank" rel="noopener">view</a>'
+    + '<button class="btn small danger" type="button" data-act="del-media" data-kind="' + kind + '" data-file="' + esc(n) + '">Delete</button></li>').join('');
+}
+async function renderValidateTab(body){
+  body.innerHTML = '<div class="row"><button class="btn primary" type="button" data-act="run-validate">Run validation</button></div><div id="validate-out"></div>';
+  $('#validate-out').innerHTML = '<p class="dim">Click “Run validation” to check this course.</p>';
+}
+async function runValidation(outEl){
+  outEl.innerHTML = '<div class="loading">Validating…</div>';
+  try {
+    const v = await api(apiBase + '/courses/' + encodeURIComponent(state.courseId) + '/validate');
+    if (v.ok){
+      outEl.innerHTML = '<div class="ok-box">All good' + (v.warnings.length ? ' · ' + v.warnings.length + ' warning(s)' : '') + '</div>' + warnList(v.warnings);
+    } else {
+      outEl.innerHTML = '<div class="err-box"><b>' + v.errors.length + ' error(s)</b><ul>' + v.errors.map(e => '<li>' + esc(e) + '</li>').join('') + '</ul></div>' + warnList(v.warnings);
+    }
+  } catch (err){
+    outEl.innerHTML = '<div class="err-box">' + esc(err.message) + '</div>';
+  }
+}
+function warnList(warnings){
+  return warnings && warnings.length
+    ? '<div class="warn-box"><b>' + warnings.length + ' warning(s)</b><ul>' + warnings.map(w => '<li>' + esc(w) + '</li>').join('') + '</ul></div>'
+    : '';
+}
+
+/* ---------------- lesson editor ---------------- */
+async function viewLesson(courseId, lid){
+  mainEl().innerHTML = '<div class="loading">Loading lesson…</div>';
+  try {
+    const [lesson, manifest] = await Promise.all([
+      api(apiBase + '/courses/' + encodeURIComponent(courseId) + '/lessons/' + encodeURIComponent(lid)),
+      api(apiBase + '/courses/' + encodeURIComponent(courseId) + '/manifest'),
+    ]);
+    state.lesson = lesson;
+    state.manifest = manifest;
+    state.courseId = courseId;
+    renderLesson(lid);
+  } catch (err){
+    mainEl().innerHTML = '<div class="err-box">' + esc(err.message) + '</div>';
+  }
+}
+function renderLesson(lid){
+  const L = state.lesson;
+  const moduleIds = (state.manifest.modules || []).map(m => m.id).filter(Boolean);
+  if (L.module && moduleIds.indexOf(L.module) < 0) moduleIds.unshift(L.module);
+  const moduleOpts = moduleIds.map(mid => '<option value="' + esc(mid) + '"' + (mid === L.module ? ' selected' : '') + '>' + esc(mid) + '</option>').join('');
+  mainEl().innerHTML = '<a class="back" href="#/course/' + encodeURIComponent(state.courseId) + '">← Back to course</a>'
+    + '<div class="lesson-top"><div class="t"><div class="h1">' + esc(L.title || lid) + '</div>'
+    + '<p class="sub">Lesson <code class="mono">' + esc(lid) + '</code> in course <code class="mono">' + esc(state.courseId) + '</code></p></div>'
+    + '<button class="btn danger" type="button" data-act="del-lesson-file" data-lid="' + esc(lid) + '">Delete lesson</button></div>'
+    + '<div class="card"><div class="form-grid">'
+    + '<div><label>ID (readonly)</label><input type="text" value="' + esc(L.id) + '" disabled></div>'
+    + '<div><label>Module</label><select id="ls-module">' + moduleOpts + '</select></div>'
+    + '<div><label>Kind</label><select id="ls-kind">' + KINDS.map(k => '<option value="' + k + '"' + (k === L.kind ? ' selected' : '') + '>' + KIND_LABEL[k] + '</option>').join('') + '</select></div>'
+    + '<div><label>Title</label><input type="text" id="ls-title" value="' + esc(L.title || '') + '" autocomplete="off"></div>'
+    + '</div>'
+    + '<div class="split" style="margin-top:14px">'
+    + '<div><label>Body (mini-markdown)</label><textarea class="body-textarea mono" id="ls-body" placeholder="## Section&#10;&#10;Some **bold** text with `code` and $$x^2$$.&#10;&#10;:::def&#10;A definition.&#10;:::">' + esc(L.body || '') + '</textarea></div>'
+    + '<div><label>Live preview</label><div class="preview" id="lesson-preview"></div></div>'
+    + '</div>'
+    + '<div id="json-blocks"></div>'
+    + '<div class="row" style="margin-top:14px">'
+    + '<button class="btn primary" type="button" data-act="save-lesson">Save lesson</button>'
+    + '<span class="status" id="ls-status"></span></div></div>';
+  renderJsonBlocks(L);
+  const body = $('#ls-body');
+  body.addEventListener('input', () => {
+    clearTimeout(state.previewTimer);
+    state.previewTimer = setTimeout(() => renderPreview(mdToHtml(body.value)), 180);
+  });
+  renderPreview(mdToHtml(body.value));
+}
+function jsonSectionHtml(name, label, L){
+  const val = L[name] || [];
+  const pretty = JSON.stringify(val, null, 2) || '[]';
+  return '<div class="json-block"><div class="json-head">'
+    + '<span class="jname">' + label + '</span>'
+    + '<button class="btn small" type="button" data-act="fmt-json" data-name="' + name + '">Format</button>'
+    + '<button class="btn small" type="button" data-act="add-blank" data-name="' + name + '">Add blank entry</button>'
+    + '<span class="status" id="js-' + name + '-status"></span></div>'
+    + '<textarea class="mono" id="json-' + name + '" spellcheck="false">' + esc(pretty) + '</textarea></div>';
+}
+function renderJsonBlocks(L){
+  $('#json-blocks').innerHTML =
+      jsonSectionHtml('defs', 'Definitions (defs)', L)
+    + jsonSectionHtml('theorems', 'Theorems', L)
+    + jsonSectionHtml('checkpoints', 'Checkpoints', L)
+    + jsonSectionHtml('exercises', 'Exercises', L);
+}
+const BLANK_ENTRIES = {
+  defs: () => ({id:'', name:'', statement:''}),
+  theorems: () => ({id:'', name:'', statement:'', proof:''}),
+  checkpoints: () => ({qid:'', question:'', options:[{text:'', is_correct:false},{text:'', is_correct:true}], explanation:''}),
+  exercises: () => ({id:'', prompt:'', hint:'', solution:''}),
+};
+function setJsonStatus(name, msg, ok){
+  const el = $('#js-' + name + '-status');
+  if (el){ el.textContent = msg || ''; el.className = 'status ' + (ok ? 'ok' : (msg ? 'err' : '')); }
+}
+function readJsonSection(name){
+  const el = $('#json-' + name);
+  if (!el) return {ok:true, value:[]};
+  const text = el.value.trim();
+  if (!text) return {ok:true, value:[]};
+  const parsed = parseJsonArr(text, name);
+  return parsed;
+}
+function collectLesson(){
+  const L = JSON.parse(JSON.stringify(state.lesson));
+  L.module = $('#ls-module').value;
+  L.kind = $('#ls-kind').value;
+  L.title = $('#ls-title').value;
+  L.body = $('#ls-body').value;
+  for (const name of ['defs','theorems','checkpoints','exercises']){
+    const r = readJsonSection(name);
+    if (!r.ok){ setJsonStatus(name, r.error, false); return null; }
+    setJsonStatus(name, '', true);
+    L[name] = r.value;
+  }
+  return L;
+}
+
+/* ---------------- delegated actions ---------------- */
+const actions = {
+  'validate-course': (el) => { location.hash = '#/course/' + encodeURIComponent(el.dataset.id); },
+  'open-lesson': (el) => { location.hash = '#/course/' + encodeURIComponent(state.courseId) + '/lesson/' + encodeURIComponent(el.dataset.lid); },
+  'del-course': async (el) => {
+    const id = el.dataset.id;
+    const typed = prompt('Delete course "' + id + '"? It will be moved to the server trash. Type the course id to confirm:', '');
+    if (typed === null) return;
+    if (typed !== id){
+      if (typed !== '') alert('Course id mismatch. Nothing was deleted.');
+      return;
+    }
+    try {
+      await api(apiBase + '/courses/' + encodeURIComponent(id), {method:'DELETE'});
+      location.hash = '#/';
+    } catch (err){ alert(err.message); }
+  },
+  'add-module': (el) => {
+    const mods = state.manifest.modules || [];
+    mods.push({id: uid('mod'), title:'New Module', lessons:[]});
+    state.manifest.modules = mods;
+    renderModuleList();
+  },
+  'rm-module': (el) => {
+    const mi = +el.closest('.module').dataset.mi;
+    const mod = state.manifest.modules[mi];
+    const label = (mod && (mod.title || mod.id)) || ('Module ' + (mi + 1));
+    if (!confirm('Remove module "' + label + '" from the manifest? Its lessons will no longer be listed. (Click Save manifest to apply.)')) return;
+    state.manifest.modules.splice(mi, 1);
+    renderModuleList();
+  },
+  'mv-module': (el) => {
+    const mods = state.manifest.modules;
+    const mi = +el.closest('.module').dataset.mi;
+    const dir = +el.dataset.dir;
+    const ni = mi + dir;
+    if (ni < 0 || ni >= mods.length) return;
+    const tmp = mods[mi]; mods[mi] = mods[ni]; mods[ni] = tmp;
+    renderModuleList();
+  },
+  'mv-lesson': (el) => {
+    const modEl = el.closest('.module');
+    const mi = +modEl.dataset.mi;
+    const rows = Array.from(modEl.querySelectorAll('.lesson-row'));
+    const li = rows.indexOf(el.closest('.lesson-row'));
+    const ni = li + +el.dataset.dir;
+    if (ni < 0 || ni >= rows.length) return;
+    const mods = state.manifest.modules;
+    const arr = mods[mi].lessons;
+    const tmp = arr[li]; arr[li] = arr[ni]; arr[ni] = tmp;
+    renderModuleList();
+  },
+  'rm-lesson': (el) => {
+    const modEl = el.closest('.module');
+    const mi = +modEl.dataset.mi;
+    const lid = el.dataset.lid;
+    if (!confirm('Remove lesson "' + lid + '" from the manifest? The lesson file itself is kept. (Click Save manifest to apply.)')) return;
+    state.manifest.modules[mi].lessons = state.manifest.modules[mi].lessons.filter(r => (typeof r === 'object' ? r.id : r) !== lid);
+    renderModuleList();
+  },
+  'del-lesson': async (el) => {
+    const modEl = el.closest('.module');
+    const mi = +modEl.dataset.mi;
+    const lid = el.dataset.lid;
+    if (!confirm('Delete lesson "' + lid + '"? The file is moved to the server trash.')) return;
+    try {
+      await api(apiBase + '/courses/' + encodeURIComponent(state.courseId) + '/lessons/' + encodeURIComponent(lid), {method:'DELETE'});
+      state.manifest.modules[mi].lessons = state.manifest.modules[mi].lessons.filter(r => (typeof r === 'object' ? r.id : r) !== lid);
+      renderModuleList();
+    } catch (err){ alert(err.message); }
+  },
+  'add-lesson': async (el) => {
+    const modEl = el.closest('.module');
+    const mi = +modEl.dataset.mi;
+    const lid = modEl.querySelector('.new-lid').value.trim();
+    const kind = modEl.querySelector('.new-kind').value;
+    const title = modEl.querySelector('.new-title').value.trim() || lid;
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(lid)){ alert('Invalid lesson id.'); return; }
+    const statusEl = $('#mf-status');
+    statusEl.textContent = ''; statusEl.className = 'status';
+    try {
+      await postJson(apiBase + '/courses/' + encodeURIComponent(state.courseId) + '/lessons', {id: lid, module: state.manifest.modules[mi].id, kind: kind, title: title});
+      state.manifest.modules[mi].lessons.push({id: lid});
+      await saveManifest(false);
+      location.hash = '#/course/' + encodeURIComponent(state.courseId) + '/lesson/' + encodeURIComponent(lid);
+    } catch (err){ statusEl.textContent = err.message; statusEl.className = 'status err'; }
+  },
+  'save-manifest': async () => await saveManifest(true),
+  'tab': (el) => { state.tab = el.dataset.tab; renderTab(); },
+  'upload-media': async (el) => {
+    const file = $('#media-file').files[0];
+    const status = $('#media-status');
+    if (!file){ status.textContent = 'Choose a file first.'; status.className = 'status err'; return; }
+    const kind = $('#media-kind').value;
+    const mediaList = state.mediaList || {audio: [], videos: []};
+    if ((kind === 'audio' ? mediaList.audio : mediaList.videos).indexOf(file.name) >= 0){
+      if (!confirm('File "' + file.name + '" already exists in ' + kind + '. Overwrite it? The old file is moved to the server trash.')) return;
+    }
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('kind', kind);
+    status.textContent = 'Uploading…'; status.className = 'status';
+    try {
+      const out = await api(apiBase + '/courses/' + encodeURIComponent(state.courseId) + '/media', {method:'POST', body: fd});
+      status.textContent = 'Uploaded ' + out.file + ' ✓'; status.className = 'status ok';
+      renderMediaTab(tabBody());
+    } catch (err){ status.textContent = err.message; status.className = 'status err'; }
+  },
+  'del-media': async (el) => {
+    if (!confirm('Delete media file "' + el.dataset.file + '"? It is moved to the server trash.')) return;
+    try {
+      await api(apiBase + '/courses/' + encodeURIComponent(state.courseId) + '/media/' + el.dataset.kind + '/' + encodeURIComponent(el.dataset.file), {method:'DELETE'});
+      renderMediaTab(tabBody());
+    } catch (err){ alert(err.message); }
+  },
+  'run-validate': async (el) => { await runValidation($('#validate-out')); },
+  'del-lesson-file': async (el) => {
+    if (!confirm('Delete lesson "' + el.dataset.lid + '"? The file is moved to the server trash.')) return;
+    try {
+      await api(apiBase + '/courses/' + encodeURIComponent(state.courseId) + '/lessons/' + encodeURIComponent(el.dataset.lid), {method:'DELETE'});
+      location.hash = '#/course/' + encodeURIComponent(state.courseId);
+    } catch (err){ alert(err.message); }
+  },
+  'fmt-json': (el) => {
+    const name = el.dataset.name;
+    const r = readJsonSection(name);
+    if (!r.ok){ setJsonStatus(name, r.error, false); return; }
+    $('#json-' + name).value = JSON.stringify(r.value, null, 2);
+    setJsonStatus(name, 'Formatted ✓', true);
+  },
+  'add-blank': (el) => {
+    const name = el.dataset.name;
+    const r = readJsonSection(name);
+    if (!r.ok){ setJsonStatus(name, r.error, false); return; }
+    r.value.push(BLANK_ENTRIES[name]());
+    $('#json-' + name).value = JSON.stringify(r.value, null, 2);
+    setJsonStatus(name, 'Added blank entry', true);
+  },
+  'save-lesson': async (el) => {
+    const status = $('#ls-status');
+    const L = collectLesson();
+    if (!L){ status.textContent = 'Fix the JSON errors above.'; status.className = 'status err'; return; }
+    if (!L.title.trim()){ status.textContent = 'Title is required.'; status.className = 'status err'; return; }
+    if (!L.module){ status.textContent = 'Module is required.'; status.className = 'status err'; return; }
+    const btn = el;
+    btn.disabled = true;
+    status.textContent = 'Saving…'; status.className = 'status';
+    try {
+      const saved = await putJson(apiBase + '/courses/' + encodeURIComponent(state.courseId) + '/lessons/' + encodeURIComponent(L.id), L);
+      state.lesson = saved;
+      status.textContent = 'Saved ✓'; status.className = 'status ok';
+    } catch (err){
+      status.textContent = err.message; status.className = 'status err';
+      const errors = err.body && err.body.errors;
+      if (errors && errors.length) status.textContent = err.message + ' — ' + errors.join('; ');
+    } finally { btn.disabled = false; }
+  },
+  'review-status': async (el) => {
+    try {
+      state.review = await putJson(apiBase + '/reviews/' + encodeURIComponent(state.reviewId), {status: el.dataset.status});
+      renderReview();
+    } catch (err){ alert(err.message); }
+  },
+  'review-decision': async (el) => {
+    const bid = el.dataset.bid;
+    let val = el.dataset.val;
+    const block = (state.review.blocks || []).find(b => b.id === bid);
+    if (block && block.decision === val) val = null; // toggling the active decision clears it
+    try {
+      await putJson(apiBase + '/reviews/' + encodeURIComponent(state.reviewId) + '/blocks/' + encodeURIComponent(bid) + '/decision', {decision: val});
+      state.review = await api(apiBase + '/reviews/' + encodeURIComponent(state.reviewId));
+      renderReview();
+    } catch (err){ alert(err.message); }
+  },
+  'review-comment': async (el) => {
+    const bid = el.dataset.bid;
+    const inp = Array.from(document.querySelectorAll('.comment-input')).find(i => i.dataset.cid === bid);
+    const text = inp ? inp.value.trim() : '';
+    if (!text){ if (inp) inp.focus(); return; }
+    try {
+      await postJson(apiBase + '/reviews/' + encodeURIComponent(state.reviewId) + '/blocks/' + encodeURIComponent(bid) + '/comments', {text: text});
+      state.review = await api(apiBase + '/reviews/' + encodeURIComponent(state.reviewId));
+      renderReview();
+    } catch (err){ alert(err.message); }
+  },
+  'del-review': async () => {
+    const r = state.review;
+    if (!confirm('Delete review "' + (r ? r.title : state.reviewId) + '"? It is moved to the server trash.')) return;
+    try {
+      await api(apiBase + '/reviews/' + encodeURIComponent(state.reviewId), {method:'DELETE'});
+      location.hash = '#/reviews';
+    } catch (err){ alert(err.message); }
+  },
+  'del-review-item': async (el) => {
+    const id = el.dataset.id;
+    if (!confirm('Delete review "' + id + '"? It is moved to the server trash.')) return;
+    try {
+      await api(apiBase + '/reviews/' + encodeURIComponent(id), {method:'DELETE'});
+      viewReviews();
+    } catch (err){ alert(err.message); }
+  },
+};
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!el || el.closest('.preview') && el.closest('.chip')) return; // chips handled separately
+  const act = el.dataset.act;
+  if (actions[act]) actions[act](el);
+});
+async function saveManifest(notify){
+  const statusEl = $('#mf-status');
+  const m = collectManifest();
+  const seen = new Set();
+  for (const mod of m.modules){
+    for (const ref of mod.lessons || []){
+      const lid = ref.id;
+      if (seen.has(lid)){ statusEl.textContent = 'Duplicate lesson id: ' + lid; statusEl.className = 'status err'; return; }
+      seen.add(lid);
+    }
+  }
+  if (notify){ statusEl.textContent = 'Saving…'; statusEl.className = 'status'; }
+  try {
+    const saved = await putJson(apiBase + '/courses/' + encodeURIComponent(state.courseId) + '/manifest', m);
+    state.manifest = saved;
+    if (notify){ statusEl.textContent = 'Saved ✓'; statusEl.className = 'status ok'; }
+  } catch (err){
+    if (notify){ statusEl.textContent = err.message; statusEl.className = 'status err'; }
+    else throw err;
+  }
+}
+
+/* ---------------- reviews: list ---------------- */
+function fmtWhen(iso){
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? esc(String(iso)) : esc(d.toLocaleString());
+}
+function reviewStatusBadge(status){
+  return status === 'done'
+    ? '<span class="badge ok">done</span>'
+    : '<span class="badge">open</span>';
+}
+async function viewReviews(){
+  mainEl().innerHTML = '<div class="loading">Loading reviews…</div>';
+  let list;
+  try { list = await api(apiBase + '/reviews'); }
+  catch (err){
+    mainEl().innerHTML = '<div class="err-box">' + esc(err.message) + '</div>';
+    return;
+  }
+  if (!list.length){
+    mainEl().innerHTML = '<div class="h1">Reviews</div>'
+      + '<p class="sub">Annotate course plans and lesson drafts with decisions and anchored comments.</p>'
+      + '<div class="card"><p class="dim">No reviews yet.</p>'
+      + '<div class="row" style="margin-top:10px"><a class="btn primary" href="#/reviews/new">New Review</a></div></div>';
+    return;
+  }
+  mainEl().innerHTML = '<div class="h1">Reviews</div>'
+    + '<p class="sub">' + list.length + ' review(s)</p>'
+    + '<div class="row" style="margin-bottom:6px"><a class="btn primary" href="#/reviews/new">New Review</a></div>'
+    + list.map(reviewCard).join('');
+}
+function reviewCard(r){
+  const progress = 'decided ' + r.decided_count + '/' + r.block_count + ' block'
+    + (r.block_count === 1 ? '' : 's');
+  const comments = r.comment_count ? ' · ' + r.comment_count + ' comment' + (r.comment_count === 1 ? '' : 's') : '';
+  return '<div class="card course-card">'
+    + '<div class="row"><h3>' + esc(r.title || r.id) + '</h3>'
+    + '<span class="badge">' + esc(r.kind || '') + '</span>' + reviewStatusBadge(r.status) + '</div>'
+    + '<p class="meta">' + esc(r.id) + ' · updated ' + fmtWhen(r.updated_at) + '</p>'
+    + '<p class="meta">' + progress + comments + '</p>'
+    + '<div class="actions">'
+    + '<a class="btn" href="#/review/' + encodeURIComponent(r.id) + '">Open</a>'
+    + '<button class="btn danger" type="button" data-act="del-review-item" data-id="' + esc(r.id) + '">Delete</button>'
+    + '</div></div>';
+}
+
+/* ---------------- reviews: new ---------------- */
+function viewReviewNew(){
+  mainEl().innerHTML = '<a class="back" href="#/reviews">← Back to reviews</a>'
+    + '<div class="h1">New Review</div>'
+    + '<p class="sub">Blocks are the proposal items (paragraphs, lessons, module plans) the owner will mark do / don’t / revise and comment on.</p>'
+    + '<div class="card col" style="max-width:680px">'
+    + '<label>ID (letters, digits, . _ -; must start with a letter or digit)</label>'
+    + '<input type="text" id="nr-id" placeholder="e.g. m5-plan-v1" autocomplete="off">'
+    + '<label>Title</label>'
+    + '<input type="text" id="nr-title" placeholder="M5 PRF/GGM — directory structure draft (v1)" autocomplete="off">'
+    + '<label>Kind</label>'
+    + '<select id="nr-kind">' + REVIEW_KINDS.map(k => '<option value="' + k + '">' + REVIEW_KIND_LABEL[k] + '</option>').join('') + '</select>'
+    + '<label>Blocks (JSON array of {id, title, text})</label>'
+    + '<textarea id="nr-blocks" class="mono" rows="12" spellcheck="false" placeholder=\'[{"id":"b1","title":"Module split","text":"Proposal content here…"}]\'></textarea>'
+    + '<div class="row"><button class="btn" type="button" id="nr-format">Format</button>'
+    + '<button class="btn primary" type="button" id="nr-submit">Create Review</button>'
+    + '<span class="status" id="nr-status"></span></div>'
+    + '</div>';
+  $('#nr-format').onclick = () => {
+    const st = $('#nr-status');
+    const r = parseJsonArr($('#nr-blocks').value, 'blocks');
+    if (!r.ok){ st.textContent = 'Blocks: ' + r.error; st.className = 'status err'; return; }
+    $('#nr-blocks').value = JSON.stringify(r.value, null, 2);
+    st.textContent = 'Formatted ✓'; st.className = 'status ok';
+  };
+  $('#nr-submit').onclick = async () => {
+    const st = $('#nr-status'), btn = $('#nr-submit');
+    const id = $('#nr-id').value.trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)){ st.textContent = 'Invalid id.'; st.className = 'status err'; return; }
+    if (!$('#nr-title').value.trim()){ st.textContent = 'Title is required.'; st.className = 'status err'; return; }
+    const parsed = parseJsonArr($('#nr-blocks').value, 'blocks');
+    if (!parsed.ok){ st.textContent = 'Blocks: ' + parsed.error; st.className = 'status err'; return; }
+    const seen = new Set();
+    for (const b of parsed.value){
+      if (!b || typeof b !== 'object'){ st.textContent = 'Every block must be an object.'; st.className = 'status err'; return; }
+      if (typeof b.id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(b.id.trim())){ st.textContent = 'Every block needs an id like b1.'; st.className = 'status err'; return; }
+      if (seen.has(b.id)){ st.textContent = 'Duplicate block id: ' + b.id; st.className = 'status err'; return; }
+      seen.add(b.id);
+      if (typeof b.text !== 'string'){ st.textContent = 'Block "' + b.id + '" is missing text.'; st.className = 'status err'; return; }
+    }
+    btn.disabled = true;
+    st.textContent = 'Creating…'; st.className = 'status';
+    try {
+      const doc = await postJson(apiBase + '/reviews', {
+        id: id,
+        title: $('#nr-title').value.trim(),
+        kind: $('#nr-kind').value,
+        blocks: parsed.value,
+      });
+      location.hash = '#/review/' + encodeURIComponent(doc.id);
+    } catch (err){
+      st.textContent = err.message; st.className = 'status err'; btn.disabled = false;
+    }
+  };
+}
+
+/* ---------------- reviews: detail ---------------- */
+async function viewReview(id){
+  state.reviewId = id;
+  state.review = null;
+  mainEl().innerHTML = '<div class="loading">Loading review…</div>';
+  try { state.review = await api(apiBase + '/reviews/' + encodeURIComponent(id)); }
+  catch (err){
+    mainEl().innerHTML = '<div class="card"><div class="h1">Review not found</div>'
+      + '<p class="sub">' + esc(err.message) + '</p>'
+      + '<a class="btn" href="#/reviews">← Back to reviews</a></div>';
+    return;
+  }
+  renderReview();
+}
+function renderReview(){
+  const r = state.review;
+  const isDone = r.status === 'done';
+  mainEl().innerHTML = '<a class="back" href="#/reviews">← Back to reviews</a>'
+    + '<div class="card"><div class="lesson-top"><div class="t"><div class="h1">' + esc(r.title || r.id) + '</div>'
+    + '<p class="sub">' + esc(r.id) + ' · <span class="badge">' + esc(r.kind || '') + '</span>'
+    + reviewStatusBadge(r.status) + ' · updated ' + fmtWhen(r.updated_at) + '</p></div>'
+    + '<div class="row">'
+    + (isDone
+        ? '<button class="btn" type="button" data-act="review-status" data-status="open">Reopen</button>'
+        : '<button class="btn primary" type="button" data-act="review-status" data-status="done">Mark done</button>')
+    + '<button class="btn danger" type="button" data-act="del-review">Delete</button>'
+    + '</div></div>'
+    + (isDone ? '<div class="ok-box">This review is marked done.</div>' : '')
+    + '<div class="lbl">Blocks</div>'
+    + ((r.blocks || []).map(reviewBlockHtml).join('') || '<p class="dim">No blocks yet.</p>');
+  document.querySelectorAll('.review-block').forEach(el => renderMath(el));
+  document.querySelectorAll('.comment-input').forEach(inp => {
+    inp.onkeydown = e => {
+      if (e.key === 'Enter'){
+        const btn = inp.parentElement.querySelector('[data-act="review-comment"]');
+        if (btn) actions['review-comment'](btn);
+      }
+    };
+  });
+}
+function reviewBlockHtml(b){
+  const decision = b.decision || '';
+  const decBtns = [['do', '✅ Do'], ['dont', '❌ Don\'t'], ['revise', '✏️ Revise']].map(pair => {
+    const val = pair[0], label = pair[1];
+    return '<button class="btn small' + (decision === val ? ' active dec-' + val : '') + '" type="button"'
+      + ' data-act="review-decision" data-bid="' + esc(b.id) + '" data-val="' + val + '"'
+      + ' title="Click the active decision again to clear it">' + label + '</button>';
+  }).join('');
+  const comments = (b.comments || []).map(c =>
+    '<div class="comment"><div class="comment-text">' + esc(c.text) + '</div>'
+    + (c.at ? '<div class="comment-at">' + fmtWhen(c.at) + '</div>' : '')
+    + '</div>').join('');
+  const count = (b.comments || []).length;
+  return '<div class="card review-block">'
+    + '<div class="review-block-head"><span class="review-block-title">' + esc(b.title || b.id || 'Block') + '</span>'
+    + (decision ? ' <span class="badge dec-' + decision + '">' + DEC_LABEL[decision] + '</span>' : '')
+    + '</div>'
+    + '<div class="block-text preview" style="min-height:0">' + mdToHtml(b.text) + '</div>'
+    + '<div class="lbl">Decision</div>'
+    + '<div class="row">' + decBtns + '</div>'
+    + '<div class="lbl">Comments (' + count + ')</div>'
+    + (comments || '<p class="dim">No comments yet.</p>')
+    + '<div class="row comment-add"><input type="text" class="comment-input" data-cid="' + esc(b.id) + '" placeholder="Add a comment…" autocomplete="off">'
+    + '<button class="btn small" type="button" data-act="review-comment" data-bid="' + esc(b.id) + '">Add</button></div>'
+    + '</div>';
+}
+
+/* ---------------- router ---------------- */
+function route(){
+  const h = location.hash.replace(/^#/, '') || '/';
+  const ml = h.match(/^\/course\/([^/]+)\/lesson\/([^/]+)$/);
+  if (ml){ viewLesson(decodeURIComponent(ml[1]), decodeURIComponent(ml[2])); return; }
+  const mc = h.match(/^\/course\/([^/]+)$/);
+  if (mc){ state.tab = 'lessons'; viewCourse(decodeURIComponent(mc[1])); return; }
+  if (h === '/new'){ viewNew(); return; }
+  if (h === '/import'){ viewImport(); return; }
+  const rr = h.match(/^\/review\/([^/]+)$/);
+  if (rr){ viewReview(decodeURIComponent(rr[1])); return; }
+  if (h === '/reviews/new'){ viewReviewNew(); return; }
+  if (h === '/reviews'){ viewReviews(); return; }
+  viewHome();
+}
+window.addEventListener('hashchange', route);
+updateTokenBtn();
+route();
+</script>
+</body>
+</html>

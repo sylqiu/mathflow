@@ -1,0 +1,172 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mathflow.local/schemas/lesson.schema.json",
+  "title": "MathFlow Lesson",
+  "description": "Schema for course lesson JSON files (data/courses/<course>/lessons/*.json). Template lives separately in templates/player.html.",
+  "type": "object",
+  "required": ["id", "module", "kind", "title", "body", "schema_version"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Bump when the lesson structure changes; migrate old files on bump."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "module": {
+      "type": "string",
+      "description": "Module id from manifest.json."
+    },
+    "kind": {
+      "enum": ["theory", "media", "checkpoint", "mcq", "exercise"]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reading": {
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "url": { "type": "string" }
+      },
+      "required": ["text"]
+    },
+    "body": {
+      "type": "string",
+      "description": "Lesson prose in mini-markdown: ## headings, - lists, **bold**, `code`, $$latex$$, > blockquote, :::def|thm|proof|con|ex|rem fences, @def:id / @thm:id chips."
+    },
+    "defs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "statement"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+          "name": { "type": "string" },
+          "statement": { "type": "string" },
+          "intuition": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "uniqueItems": false
+    },
+    "theorems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "statement"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+          "name": { "type": "string" },
+          "statement": { "type": "string" },
+          "proof": { "type": "string", "description": "Full proof, rendered inside a Proof container." },
+          "intuition": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "checkpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["qid", "question", "options", "explanation"],
+        "properties": {
+          "qid": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+          "question": { "type": "string" },
+          "options": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "required": ["text", "is_correct"],
+              "properties": {
+                "text": { "type": "string" },
+                "is_correct": { "type": "boolean" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "explanation": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "exercises": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "prompt", "hint", "solution"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+          "prompt": { "type": "string" },
+          "hint": { "type": "string" },
+          "solution": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "media": {
+      "type": "object",
+      "properties": {
+        "videos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "file", "title", "duration_sec"],
+            "properties": {
+              "id": { "type": "string" },
+              "file": { "type": "string" },
+              "title": { "type": "string" },
+              "duration_sec": { "type": "number" },
+              "chapters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["label", "t"],
+                  "properties": {
+                    "label": { "type": "string" },
+                    "t": { "type": "number" }
+                  }
+                }
+              },
+              "before": { "$ref": "#/definitions/quiz" },
+              "after": { "$ref": "#/definitions/quiz" }
+            }
+          }
+        }
+      }
+    },
+    "audio": {
+      "type": "object",
+      "properties": {
+        "file": { "type": "string" }
+      }
+    }
+  },
+  "definitions": {
+    "quiz": {
+      "type": "object",
+      "required": ["qid", "question", "options", "explanation"],
+      "properties": {
+        "qid": { "type": "string" },
+        "question": { "type": "string" },
+        "options": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "required": ["text", "is_correct"],
+            "properties": {
+              "text": { "type": "string" },
+              "is_correct": { "type": "boolean" }
+            }
+          }
+        },
+        "explanation": { "type": "string" }
+      }
+    }
+  }
+}

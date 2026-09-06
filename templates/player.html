@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MathFlow · Course Mode</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --fg:#e6e9ef; --dim:#8b93a3;
+          --green:#3fb96f; --red:#e05555; --blue:#5b9dff; --mono:ui-monospace,Menlo,Consolas,monospace; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; }
+  body { background:var(--bg); color:var(--fg); font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  a { color:var(--blue); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  #topbar { position:fixed; top:0; left:0; right:0; height:52px; display:flex; align-items:center; gap:10px;
+            padding:0 16px; background:var(--panel); border-bottom:1px solid var(--line); z-index:40; }
+  #menu-btn { background:none; border:1px solid var(--line); color:var(--fg); border-radius:8px;
+              font-size:16px; padding:4px 10px; cursor:pointer; }
+  #menu-btn:hover { border-color:var(--blue); }
+  #topbar-title { color:var(--dim); font-size:13px; }
+  #sidebar { position:fixed; top:52px; left:0; bottom:0; width:300px; background:var(--panel);
+             border-right:1px solid var(--line); overflow-y:auto; padding:14px; z-index:30;
+             transition:transform .18s ease; }
+  body.drawer-closed #sidebar { transform:translateX(-100%); }
+  body.drawer-closed #main { margin-left:0; }
+  #backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:25; }
+  #main { margin-left:300px; padding:84px 24px 100px; max-width:900px; min-height:100vh; }
+  @media (max-width:900px) {
+    #sidebar { transform:translateX(-100%); }
+    #main { margin-left:0; }
+    body.drawer-open #sidebar { transform:translateX(0); }
+    body.drawer-open #backdrop { display:block; }
+  }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:14px; }
+  .badge { font-size:11px; color:var(--dim); border:1px solid var(--line); border-radius:20px; padding:1px 10px; }
+  .lbl { font-size:12px; color:var(--dim); margin:28px 0 10px; text-transform:uppercase; letter-spacing:.5px; }
+  .sub { color:var(--dim); font-size:13px; margin:6px 0 14px; }
+  .src a { font-size:13px; }
+  h1 { font-size:24px; margin:10px 0 6px; }
+  .body h2 { font-size:19px; margin:26px 0 10px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  .body h3 { font-size:16px; margin:20px 0 8px; }
+  .body p { margin:10px 0; }
+  .body code { background:#0c0e12; border:1px solid var(--line); border-radius:5px; padding:1px 6px;
+               font-family:var(--mono); font-size:13px; color:#a8c7fa; }
+  .body strong { color:#fff; }
+  .chip { display:inline-block; background:#1d2635; color:var(--blue); border:1px solid #31415c;
+          border-radius:12px; padding:0 9px; font-size:12.5px; cursor:pointer; margin:0 2px; }
+  .chip:hover { border-color:var(--blue); }
+  .chip-thm { color:#d9a8ff; border-color:#4a3a63; }
+  /* ---- content containers: Definition / Theorem / Proof / etc. ---- */
+  .box { border-radius:10px; padding:14px 16px; margin:16px 0; border:1px solid var(--line); border-left:4px solid; }
+  .box-label { font-size:11px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; margin-bottom:4px; }
+  .box-title { font-size:15px; font-weight:700; margin-bottom:8px; color:#fff; }
+  .box-body p:first-child { margin-top:0; }
+  .box-body p:last-child { margin-bottom:0; }
+  .box-intuition { margin-top:10px; padding-top:8px; border-top:1px dashed var(--line); font-size:13.5px; color:var(--dim); }
+  .def-box { background:rgba(91,157,255,.07); border-left-color:var(--blue); }
+  .def-box .box-label { color:var(--blue); }
+  .thm-box { background:rgba(217,168,255,.07); border-left-color:#d9a8ff; }
+  .thm-box .box-label { color:#d9a8ff; }
+  .proof-box { background:rgba(63,185,111,.06); border-left-color:var(--green); }
+  .proof-box .box-label { color:var(--green); }
+  .con-box { background:rgba(255,180,80,.07); border-left-color:#ffb450; }
+  .con-box .box-label { color:#ffb450; }
+  .ex-box { background:rgba(255,180,80,.05); border-left-color:#ffb450; }
+  .ex-box .box-label { color:#ffb450; }
+  .rem-box { background:rgba(139,147,163,.07); border-left-color:var(--dim); }
+  .rem-box .box-label { color:var(--dim); }
+  blockquote { margin:10px 0; padding:8px 14px; border-left:3px solid var(--blue); background:#10131a; border-radius:0 8px 8px 0; color:var(--dim); }
+  .box .box { margin:10px 0 4px; }
+  .chip-link { text-decoration:none; }
+  .opt { display:block; width:100%; text-align:left; background:#0c0e12; color:var(--fg);
+         border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:8px 0;
+         cursor:pointer; font-size:14px; }
+  .opt:hover:not(:disabled) { border-color:var(--blue); }
+  .opt:disabled { cursor:default; }
+  .opt.correct { border-color:var(--green); background:rgba(63,185,111,.12); color:#c9f2d8; }
+  .opt.wrong { border-color:var(--red); background:rgba(224,85,85,.12); color:#f6d0d0; }
+  .expl { display:none; margin-top:10px; background:#10131a; border-left:3px solid var(--blue);
+          padding:10px 12px; border-radius:0 8px 8px 0; font-size:14px; white-space:pre-wrap; }
+  .btn { background:#1d2635; color:var(--fg); border:1px solid var(--line); border-radius:8px;
+         padding:6px 14px; cursor:pointer; font-size:13.5px; }
+  .btn:hover:not(:disabled) { border-color:var(--blue); }
+  .btn:disabled { opacity:.6; cursor:default; }
+  .hint { color:var(--dim); font-size:14px; border-left:3px solid var(--blue); padding-left:10px; margin-top:10px; }
+  .solution { margin-top:10px; background:#0c0e12; border:1px solid var(--line); border-radius:8px;
+              padding:12px; font-size:13.5px; white-space:pre-wrap; font-family:var(--mono); }
+  .row { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .progress { display:flex; align-items:center; gap:10px; margin:8px 0 12px; }
+  .bar { flex:1; height:8px; background:#0c0e12; border:1px solid var(--line); border-radius:20px; overflow:hidden; }
+  .fill { height:100%; background:var(--green); border-radius:20px; transition:width .2s ease; }
+  .pct { font-size:12px; color:var(--dim); }
+  .lesson-row { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px; color:var(--fg); }
+  .lesson-row:hover { background:#1b2029; text-decoration:none; }
+  .lesson-row .check { color:var(--dim); width:16px; text-align:center; }
+  .lesson-row.done .check { color:var(--green); }
+  .lesson-row.done .lt { color:var(--dim); }
+  .kind { margin-left:auto; font-size:10.5px; color:var(--dim); border:1px solid var(--line);
+          border-radius:10px; padding:0 8px; }
+  .hero h1 { font-size:26px; }
+  .mod-title { font-size:15px; font-weight:600; }
+  .banner { display:none; background:rgba(63,185,111,.12); border:1px solid var(--green);
+            color:#c9f2d8; border-radius:10px; padding:10px 14px; margin:14px 0; font-size:14px; }
+  .side-brand { font-size:15px; margin-bottom:14px; }
+  .side-home { display:block; margin-bottom:10px; font-size:13.5px; }
+  .mod-head { display:flex; align-items:center; gap:6px; cursor:pointer; padding:8px 6px;
+              border-radius:8px; font-size:13px; }
+  .mod-head:hover { background:#1b2029; }
+  .mod-name { flex:1; color:var(--fg); font-weight:600; }
+  .mod-count { font-size:11px; color:var(--dim); }
+  .mod-lessons { margin:2px 0 10px 14px; border-left:1px solid var(--line); padding-left:6px; }
+  #popover { position:fixed; z-index:60; display:none; }
+  .pop-card { background:var(--panel); border:1px solid var(--blue); border-radius:12px;
+              padding:14px; box-shadow:0 10px 30px rgba(0,0,0,.5); }
+  .pop-kind { font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+  .pop-name { font-size:15px; font-weight:700; margin-bottom:8px; color:var(--blue); }
+  .pop-statement { font-size:14px; }
+  .pop-intuition { margin-top:10px; font-size:13px; color:var(--dim); border-top:1px solid var(--line); padding-top:8px; }
+  .loading { color:var(--dim); }
+  .dim { color:var(--dim); }
+  .reading { font-size:13px; color:var(--dim); margin:4px 0 8px; }
+  .podcast { margin:12px 0 16px; }
+  .podcast-label { font-size:12px; color:var(--dim); margin-bottom:6px; }
+  .podcast audio { width:100%; height:40px; }
+  .videos { margin:4px 0 0; }
+  .video-card { padding:14px 16px; }
+  .video-title { font-size:13px; color:var(--dim); margin:2px 0 8px; }
+  .video-player { display:block; width:100%; max-width:100%; background:#000;
+                  border:1px solid var(--line); border-radius:10px; }
+  .chapters { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .chapter-chip { background:#1d2635; color:var(--blue); border:1px solid #31415c;
+                  border-radius:14px; padding:2px 10px; font-size:12px; cursor:pointer; }
+  .chapter-chip:hover:not(.active) { border-color:var(--blue); }
+  .chapter-chip.active { background:var(--blue); color:#0c0e12; border-color:var(--blue); }
+  .video-q { margin-bottom:10px; }
+  .video-q-head { cursor:pointer; font-size:14px; font-weight:600; padding:4px 0; }
+  .video-q-before .video-q-head { border-left:3px solid var(--blue); padding-left:10px; }
+  .video-q-after .video-q-head { border-left:3px solid var(--green); padding-left:10px; }
+  .video-q .opts { margin-top:6px; }
+  .back { font-size:13px; }
+  .lesson-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .ex-prompt { font-size:14.5px; }
+</style>
+</head>
+<body>
+<header id="topbar">
+  <button id="menu-btn" aria-label="Toggle menu">☰</button>
+  <span id="topbar-title">MathFlow Course Mode</span>
+</header>
+<div id="backdrop"></div>
+<aside id="sidebar"></aside>
+<main id="main"><div class="loading">Loading…</div></main>
+<div id="popover"></div>
+<script>
+"use strict";
+const state = { courses: [], course: null, lesson: null, solutions: {}, progress: {lessons:{}, videos:{}}, ui: {collapsed:{}} };
+let STATIC = false;  // true on the GitHub Pages build (data/*.json), false on the live server (/api/*)
+async function detectMode(){
+  try {
+    const r = await fetch('data/config.json');
+    if (r.ok){ const cfg = await r.json(); STATIC = !!(cfg && cfg.mode === 'static'); }
+  } catch(e){ STATIC = false; }
+}
+function apiCourses(){ return STATIC ? 'data/courses.json' : '/api/courses'; }
+function apiLesson(courseId, lessonId){ return STATIC ? 'data/lessons/' + lessonId + '.json' : '/api/courses/' + courseId + '/lessons/' + lessonId; }
+function apiSolutions(courseId, lessonId){ return STATIC ? 'data/solutions/' + lessonId + '.json' : '/api/courses/' + courseId + '/lessons/' + lessonId + '/solutions'; }
+function mediaVideo(courseId, file){ return STATIC ? 'media/videos/' + encodeURIComponent(file) : '/media/' + courseId + '/videos/' + encodeURIComponent(file); }
+function mediaAudio(courseId, file){ return STATIC ? 'media/audio/' + encodeURIComponent(file) : '/media/' + courseId + '/audio/' + encodeURIComponent(file); }
+const mainEl = () => document.getElementById('main');
+const sidebarEl = () => document.getElementById('sidebar');
+
+function esc(s){
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function loadProgress(courseId){
+  try {
+    const v = JSON.parse(localStorage.getItem('mf2:v1:' + courseId + ':progress'));
+    if (v && v.lessons){
+      if (!v.videos || typeof v.videos !== 'object') v.videos = {};
+      return v;
+    }
+    return {lessons:{}, videos:{}};
+  } catch(e){ return {lessons:{}, videos:{}}; }
+}
+function saveProgress(courseId){
+  try { localStorage.setItem('mf2:v1:' + courseId + ':progress', JSON.stringify(state.progress)); } catch(e){}
+}
+function loadUI(){
+  try { state.ui = JSON.parse(localStorage.getItem('mf2:v1:ui')) || {collapsed:{}}; } catch(e){ state.ui = {collapsed:{}}; }
+}
+function saveUI(){
+  try { localStorage.setItem('mf2:v1:ui', JSON.stringify(state.ui)); } catch(e){}
+}
+function courseById(id){ return state.courses.find(c => c.id === id) || state.courses[0] || null; }
+function lessonDone(courseId, lid){
+  const p = loadProgress(courseId);
+  return !!(p.lessons[lid] && p.lessons[lid].done);
+}
+function lessonVideos(lesson){
+  return (lesson.media && Array.isArray(lesson.media.videos)) ? lesson.media.videos : [];
+}
+function videoQState(lesson, v, which){
+  const vp = state.progress.videos[lesson.id] || {};
+  return !!(vp[v.id] && vp[v.id][which]);
+}
+function videosDone(lesson){
+  const vids = lessonVideos(lesson);
+  if (!vids.length) return true;
+  const vp = state.progress.videos[lesson.id] || {};
+  return vids.every(v => vp[v.id] && vp[v.id].before && vp[v.id].after);
+}
+function lessonComplete(lesson){
+  const prog = state.progress.lessons[lesson.id] || {done:false, checkpoints:{}};
+  const cps = lesson.checkpoints || [];
+  return cps.every(c => prog.checkpoints[c.qid]) && videosDone(lesson);
+}
+
+/* ---------------- tiny markdown -> HTML ---------------- */
+function inlineMd(s){
+  const codes = [];
+  s = s.replace(/`([^`]+)`/g, (m, c) => { codes.push(c); return '\u0000' + (codes.length - 1) + '\u0000'; });
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/@(def|thm):([A-Za-z0-9._-]+)/g,
+    '<span class="chip chip-$1" data-ref="$1" data-id="$2" title="Click to open">@$1:$2</span>');
+  s = s.replace(/\u0000(\d+)\u0000/g, (m, i) => '<code>' + esc(codes[+i]) + '</code>');
+  return s;
+}
+function boxFor(kindClass, label, title, body, extra){
+  return '<div class="box ' + kindClass + '-box">'
+    + '<div class="box-label">' + esc(label || '') + '</div>'
+    + (title ? '<div class="box-title">' + esc(title) + '</div>' : '')
+    + '<div class="box-body">' + body + '</div>'
+    + (extra || '') + '</div>';
+}
+/* Render the full statement of a def/thm entry as a container box.
+   id: DOM anchor used by later chips to scroll here. */
+function entryBox(ref, entry, id){
+  if (!entry) return '';
+  const kind = ref === 'def' ? 'Definition' : 'Theorem';
+  const body = inlineMd(esc(entry.statement || ''));
+  let html = '<div class="box ' + (ref === 'def' ? 'def' : 'thm') + '-box"' + (id ? ' id="' + id + '"' : '') + '>'
+    + '<div class="box-label">' + esc(kind) + '</div>'
+    + '<div class="box-title">' + esc(entry.name || kind) + '</div>'
+    + '<div class="box-body">' + body + '</div>'
+    + (entry.intuition ? '<div class="box-intuition"><b>Intuition.</b> ' + inlineMd(esc(entry.intuition)) + '</div>' : '')
+    + '</div>';
+  /* proof renders as its own sibling container, not nested inside the theorem */
+  if (ref === 'thm' && entry.proof){
+    html += boxFor('proof', 'Proof', '', inlineMd(esc(entry.proof)), '');
+  }
+  return html;
+}
+/* Expand @def:x / @thm:x chips: the FIRST mention of each entry becomes a full
+   container box; later mentions become chips that scroll to that box. */
+function expandChips(html){
+  const defs = (state.lesson && state.lesson.defs) || [];
+  const thms = (state.lesson && state.lesson.theorems) || [];
+  const first = {};  // "def:id" -> DOM id
+  let out = html;
+  out = out.replace(/<span class="chip chip-(def|thm)" data-ref="\1" data-id="([A-Za-z0-9._-]+)"[^>]*>@\1:\2<\/span>/g,
+    (m, ref, id) => {
+      /* strip sentence punctuation that the greedy inline regex swallowed
+         (e.g. "@def:prg." at end of a sentence) */
+      const cleanId = id.replace(/\.+$/, '');
+      const key = ref + ':' + cleanId;
+      if (!first[key]){
+        first[key] = 'box-' + key.replace(/:/g, '-');
+        const pool = ref === 'def' ? defs : thms;
+        const entry = (pool || []).find(x => x && (x.id === id || x.id === cleanId));
+        const box = entryBox(ref, entry, first[key]);
+        if (box) return box;
+      }
+      const target = first[key] || '';
+      const trail = id.slice(cleanId.length);  // punctuation that was part of the match
+      return '<a class="chip chip-link" href="#' + target + '" data-target="' + target + '">@' + ref + ':' + cleanId + '</a>' + trail;
+    });
+  return out;
+}
+/* Parse a block of markdown lines (paragraphs + lists + blockquotes) into HTML. */
+function blocksToHtml(lines){
+  let html = '';
+  let para = [];
+  let list = null;
+  const flushPara = () => {
+    if (para.length){ html += '<p>' + inlineMd(esc(para.join('\n'))) + '</p>'; para = []; }
+  };
+  const flushList = () => {
+    if (list){
+      html += '<' + list.tag + '>' + list.items.map(it => '<li>' + inlineMd(esc(it)) + '</li>').join('') + '</' + list.tag + '>';
+      list = null;
+    }
+  };
+  for (const raw of lines){
+    const t = raw.trim();
+    if (!t){ flushPara(); flushList(); continue; }
+    const bq = t.match(/^> ?(.*)$/);
+    if (bq){ flushPara(); flushList(); html += '<blockquote>' + inlineMd(esc(bq[1])) + '</blockquote>'; continue; }
+    const li = t.match(/^[-*] (.*)$/);
+    if (li){ flushPara(); if (!list) list = {tag:'ul', items:[]}; list.items.push(li[1]); continue; }
+    const oli = t.match(/^\d+\.\s+(.*)$/);
+    if (oli){ flushPara(); if (!list) list = {tag:'ol', items:[]}; list.items.push(oli[1]); continue; }
+    flushList();
+    para.push(t);
+  }
+  flushPara();
+  flushList();
+  return html;
+}
+const BOX_KINDS = {def:'def', thm:'thm', proof:'proof', con:'con', ex:'ex', rem:'rem'};
+const BOX_LABELS = {def:'Definition', thm:'Theorem', proof:'Proof', con:'Construction', ex:'Example', rem:'Remark'};
+/* Keyword -> container kind for bold-lead paragraphs. */
+const BOLD_LEAD_KIND = {
+  'Definition':'def', 'Theorem':'thm', 'Proposition':'thm', 'Lemma':'thm',
+  'Corollary':'thm', 'Claim':'thm', 'Fact':'thm', 'Construction':'con',
+  'Remark':'rem', 'Example':'ex', 'Proof':'proof'
+};
+function mdToHtml(md){
+  const lines = String(md || '').split('\n');
+  let html = '';
+  let i = 0;
+  while (i < lines.length){
+    const t = lines[i].trim();
+    if (!t){ i++; continue; }
+    /* container fences: :::def / :::thm / :::proof / :::con / :::ex / :::rem */
+    const fence = t.match(/^:::(def|thm|proof|con|ex|rem)\s*$/);
+    if (fence){
+      const kind = fence[1];
+      const inner = [];
+      i++;
+      while (i < lines.length && lines[i].trim() !== ':::'){ inner.push(lines[i]); i++; }
+      if (i < lines.length) i++;  // consume closing :::
+      html += boxFor(BOX_KINDS[kind], BOX_LABELS[kind], '', blocksToHtml(inner), '');
+      continue;
+    }
+    const h = t.match(/^(#{2,4}) (.*)$/);
+    if (h){ const lvl = Math.min(h[1].length, 4); html += '<h' + lvl + '>' + inlineMd(esc(h[2])) + '</h' + lvl + '>'; i++; continue; }
+    /* blockquote: > ... */
+    const bq = t.match(/^> ?(.*)$/);
+    if (bq){ html += '<blockquote>' + inlineMd(esc(bq[1])) + '</blockquote>'; i++; continue; }
+    /* bold-lead auto containers: "**Definition 2.1 (...).** ..." — the container
+       swallows ALL following lines until the next block-level boundary:
+       a heading, another bold-lead keyword, a fence, or end of input.
+       This keeps multi-paragraph statements, formulas, lists and prose inside. */
+    const bl = t.match(/^\*\*(Definition|Theorem|Proposition|Lemma|Corollary|Claim|Fact|Construction|Remark|Example|Proof)\b([^*]*?)\.\*\*\s*(.*)$/);
+    if (bl){
+      const kw = bl[1];
+      const kind = BOLD_LEAD_KIND[kw] || 'thm';
+      const title = (kind === 'proof' ? '' : (kw + (bl[2] || '')).replace(/\.$/, ''));
+      const bodyLines = [bl[3]];
+      i++;
+      while (i < lines.length){
+        const n = lines[i].trim();
+        if (!n){ bodyLines.push(''); i++; continue; }
+        if (/^#{2,4} /.test(n)) break;                                  // heading ends container
+        if (/^:::(def|thm|proof|con|ex|rem)/.test(n)) break;            // fence ends container
+        if (/^@(def|thm):/.test(n)) break;                              // chip reference ends container
+        if (/^\*\*(Definition|Theorem|Proposition|Lemma|Corollary|Claim|Fact|Construction|Remark|Example|Proof)\b/.test(n)) break;  // next bold-lead keyword
+        bodyLines.push(lines[i]); i++;
+      }
+      html += boxFor(kind, BOX_LABELS[kind] || kw, title, blocksToHtml(bodyLines), '');
+      continue;
+    }
+    /* bullet / numbered lists */
+    const liMatch = t.match(/^([-*]|\d+\.)\s+(.*)$/);
+    if (liMatch){
+      const ordered = /^\d+\./.test(liMatch[1]);
+      const items = [liMatch[2]];
+      i++;
+      while (i < lines.length){
+        const n = lines[i].trim().match(/^([-*]|\d+\.)\s+(.*)$/);
+        if (!n) break;
+        items.push(n[2]); i++;
+      }
+      html += '<' + (ordered ? 'ol' : 'ul') + '>' + items.map(it => '<li>' + inlineMd(esc(it)) + '</li>').join('') + '</' + (ordered ? 'ol' : 'ul') + '>';
+      continue;
+    }
+    /* ordinary paragraph */
+    const para = [t];
+    i++;
+    while (i < lines.length && lines[i].trim() && !/^(#{2,4} |:::|[-*>] |\d+\. )/.test(lines[i])){
+      para.push(lines[i]); i++;
+    }
+    html += '<p>' + inlineMd(esc(para.join('\n'))) + '</p>';
+  }
+  return html;
+}
+function renderMath(root){
+  if (window.renderMathInElement){
+    try {
+      renderMathInElement(root, {
+        delimiters: [ {left:'$$', right:'$$', display:true}, {left:'$', right:'$', display:false} ],
+        throwOnError:false
+      });
+    } catch(e){}
+  }
+}
+
+/* ---------------- sidebar ---------------- */
+function renderSidebar(){
+  const sb = sidebarEl();
+  sb.innerHTML = '';
+  if (!state.course){ sb.innerHTML = '<div class="dim">No course selected.</div>'; return; }
+  const brand = document.createElement('div');
+  brand.className = 'side-brand';
+  brand.innerHTML = '<strong>MathFlow</strong> <span class="dim">Course Mode</span>';
+  const home = document.createElement('a');
+  home.className = 'side-home';
+  home.href = '#/course/' + state.course.id;
+  home.textContent = 'Course home';
+  sb.appendChild(brand);
+  sb.appendChild(home);
+  state.course.modules.forEach(mod => {
+    const sec = document.createElement('div');
+    sec.className = 'mod';
+    const collapsed = state.ui.collapsed[state.course.id] && state.ui.collapsed[state.course.id][mod.id];
+    const done = mod.lessons.filter(l => lessonDone(state.course.id, l.id)).length;
+    const head = document.createElement('div');
+    head.className = 'mod-head';
+    head.innerHTML = '<span class="caret">' + (collapsed ? '▸' : '▾') + '</span>'
+      + '<span class="mod-name">' + esc(mod.title) + '</span>'
+      + '<span class="mod-count">' + done + '/' + mod.lessons.length + '</span>';
+    head.addEventListener('click', () => {
+      state.ui.collapsed[state.course.id] = state.ui.collapsed[state.course.id] || {};
+      state.ui.collapsed[state.course.id][mod.id] = !collapsed;
+      saveUI();
+      renderSidebar();
+    });
+    const list = document.createElement('div');
+    list.className = 'mod-lessons';
+    if (collapsed) list.style.display = 'none';
+    mod.lessons.forEach(l => {
+      const d = lessonDone(state.course.id, l.id);
+      const row = document.createElement('a');
+      row.className = 'lesson-row side' + (d ? ' done' : '');
+      row.href = '#/course/' + state.course.id + '/lesson/' + l.id;
+      row.innerHTML = '<span class="check">' + (d ? '✓' : '○') + '</span>' + esc(l.title);
+      list.appendChild(row);
+    });
+    sec.appendChild(head);
+    sec.appendChild(list);
+    sb.appendChild(sec);
+  });
+}
+
+/* ---------------- course home ---------------- */
+function openCourse(courseId){
+  const course = courseById(courseId);
+  if (!course){ mainEl().innerHTML = '<div class="loading">No courses available.</div>'; return; }
+  state.course = course;
+  state.progress = loadProgress(course.id);
+  state.lesson = null;
+  state.solutions = {};
+  document.title = course.title + ' · MathFlow';
+  const main = mainEl();
+  main.innerHTML = '';
+  const hero = document.createElement('div');
+  hero.className = 'hero';
+  hero.innerHTML = '<h1>' + esc(course.title) + '</h1>'
+    + '<div class="sub">' + esc(course.subtitle) + '</div>'
+    + (course.source_url ? '<div class="src"><a href="' + esc(course.source_url) + '" target="_blank" rel="noopener">Source: ' + esc(course.source_url) + '</a></div>' : '');
+  main.appendChild(hero);
+  course.modules.forEach(mod => {
+    const sec = document.createElement('div');
+    sec.className = 'card module';
+    const done = mod.lessons.filter(l => lessonDone(course.id, l.id)).length;
+    const total = mod.lessons.length;
+    const pct = total ? Math.round(100 * done / total) : 0;
+    sec.innerHTML = '<div class="mod-title">' + esc(mod.title) + '</div>'
+      + '<div class="progress"><div class="bar"><div class="fill" style="width:' + pct + '%"></div></div>'
+      + '<span class="pct">' + done + '/' + total + '</span></div>';
+    const list = document.createElement('div');
+    list.className = 'lesson-list';
+    mod.lessons.forEach(l => {
+      const d = lessonDone(course.id, l.id);
+      const row = document.createElement('a');
+      row.className = 'lesson-row' + (d ? ' done' : '');
+      row.href = '#/course/' + course.id + '/lesson/' + l.id;
+      row.innerHTML = '<span class="check">' + (d ? '✓' : '○') + '</span>'
+        + '<span class="lt">' + esc(l.title) + '</span>'
+        + '<span class="kind">' + esc(l.kind) + '</span>';
+      list.appendChild(row);
+    });
+    sec.appendChild(list);
+    main.appendChild(sec);
+  });
+  renderSidebar();
+  closeDrawer();
+}
+
+/* ---------------- lesson view ---------------- */
+function renderCheckpoints(lesson){
+  const wrap = document.createElement('div');
+  wrap.className = 'checkpoints';
+  wrap.innerHTML = '<div class="lbl">Checkpoints</div>';
+  const cps = lesson.checkpoints || [];
+  if (!cps.length){ wrap.innerHTML += '<div class="dim">No checkpoints in this lesson.</div>'; return wrap; }
+  cps.forEach((cp, ci) => {
+    const card = document.createElement('div');
+    card.className = 'card cp';
+    card.innerHTML = '<div class="cp-q">' + esc((ci + 1) + '. ' + cp.question) + '</div>';
+    const opts = document.createElement('div');
+    opts.className = 'opts';
+    cp.options.forEach((opt, oi) => {
+      const b = document.createElement('button');
+      b.className = 'opt';
+      b.textContent = opt.text;
+      b.addEventListener('click', () => answerCheckpoint(lesson, cp.qid, oi, card));
+      opts.appendChild(b);
+    });
+    const expl = document.createElement('div');
+    expl.className = 'expl';
+    card.appendChild(opts);
+    card.appendChild(expl);
+    wrap.appendChild(card);
+  });
+  return wrap;
+}
+async function answerCheckpoint(lesson, qid, oi, card){
+  const buttons = card.querySelectorAll('.opt');
+  buttons.forEach(b => b.disabled = true);
+  let res;
+  try {
+    res = await fetch('/api/courses/' + state.course.id + '/checkpoint', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({qid: qid, option_index: oi})
+    }).then(r => r.json());
+  } catch(e){ res = {correct:false, explanation:'Could not reach the server.'}; }
+  if (STATIC){
+    const cp = (state.lesson && state.lesson.checkpoints || []).find(c => c.qid === qid);
+    const opt = cp && cp.options[oi];
+    res = {correct: !!(opt && opt.is_correct), explanation: (cp && cp.explanation) || ''};
+  }
+  buttons.forEach((b, i) => { if (i === oi) b.classList.add(res.correct ? 'correct' : 'wrong'); });
+  const expl = card.querySelector('.expl');
+  expl.textContent = res.explanation || '';
+  expl.style.display = 'block';
+  const prog = state.progress;
+  prog.lessons[lesson.id] = prog.lessons[lesson.id] || {done:false, checkpoints:{}};
+  if (res.correct){
+    prog.lessons[lesson.id].checkpoints[qid] = true;
+    if (lessonComplete(lesson)){ prog.lessons[lesson.id].done = true; }
+    saveProgress(state.course.id);
+    renderSidebar();
+    const banner = document.getElementById('lesson-banner');
+    if (banner && prog.lessons[lesson.id].done) banner.style.display = 'block';
+  } else {
+    saveProgress(state.course.id);
+  }
+}
+function renderVideoQuiz(lesson, v, which, q){
+  const card = document.createElement('div');
+  card.className = 'video-q video-q-' + which;
+  if (!q) return card;
+  const answered = videoQState(lesson, v, which);
+  const head = document.createElement('div');
+  head.className = 'video-q-head';
+  head.textContent = (which === 'before' ? 'Before you watch: ' : 'After you watched: ') + q.question;
+  const opts = document.createElement('div');
+  opts.className = 'opts';
+  if (which === 'after' && !answered) opts.style.display = 'none';
+  (q.options || []).forEach((opt, oi) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'opt';
+    b.textContent = opt.text;
+    b.addEventListener('click', () => answerVideoQuestion(lesson, v, which, q, oi, card));
+    opts.appendChild(b);
+  });
+  const expl = document.createElement('div');
+  expl.className = 'expl';
+  head.addEventListener('click', () => {
+    opts.style.display = opts.style.display === 'none' ? 'block' : 'none';
+  });
+  card.appendChild(head);
+  card.appendChild(opts);
+  card.appendChild(expl);
+  if (answered) applyVideoQState(card, q);
+  return card;
+}
+function applyVideoQState(card, q){
+  const buttons = card.querySelectorAll('.opt');
+  buttons.forEach((b, i) => {
+    b.disabled = true;
+    if (q.options[i] && q.options[i].is_correct) b.classList.add('correct');
+  });
+  const expl = card.querySelector('.expl');
+  expl.textContent = q.explanation || '';
+  expl.style.display = 'block';
+}
+function revealVideoQ(card){
+  const opts = card.querySelector('.opts');
+  if (opts) opts.style.display = 'block';
+}
+function answerVideoQuestion(lesson, v, which, q, oi, card){
+  const buttons = card.querySelectorAll('.opt');
+  buttons.forEach(b => b.disabled = true);
+  const correct = !!(q.options[oi] && q.options[oi].is_correct);
+  buttons.forEach((b, i) => { if (i === oi) b.classList.add(correct ? 'correct' : 'wrong'); });
+  const expl = card.querySelector('.expl');
+  expl.textContent = q.explanation || '';
+  expl.style.display = 'block';
+  if (correct){
+    state.progress.videos[lesson.id] = state.progress.videos[lesson.id] || {};
+    const st = state.progress.videos[lesson.id][v.id] || {before:false, after:false};
+    st[which] = true;
+    state.progress.videos[lesson.id][v.id] = st;
+    state.progress.lessons[lesson.id] = state.progress.lessons[lesson.id] || {done:false, checkpoints:{}};
+    if (lessonComplete(lesson)) state.progress.lessons[lesson.id].done = true;
+    saveProgress(state.course.id);
+    renderSidebar();
+    const banner = document.getElementById('lesson-banner');
+    if (banner && state.progress.lessons[lesson.id].done) banner.style.display = 'block';
+  } else {
+    saveProgress(state.course.id);
+  }
+}
+function renderVideos(lesson){
+  const wrap = document.createElement('div');
+  wrap.className = 'videos';
+  const vids = lessonVideos(lesson);
+  if (!vids.length) return wrap;
+  wrap.innerHTML = '<div class="lbl">Videos</div>';
+  vids.forEach(v => {
+    const card = document.createElement('div');
+    card.className = 'card video-card';
+    const before = renderVideoQuiz(lesson, v, 'before', v.before);
+    const title = document.createElement('div');
+    title.className = 'video-title';
+    title.textContent = v.title || v.id;
+    const video = document.createElement('video');
+    video.className = 'video-player';
+    video.controls = true;
+    video.preload = 'metadata';
+    video.src = mediaVideo(state.course.id, v.file);
+    const chapters = document.createElement('div');
+    chapters.className = 'chapters';
+    const chList = v.chapters || [];
+    chList.forEach(ch => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chapter-chip';
+      b.textContent = ch.label || '';
+      b.dataset.t = ch.t;
+      b.addEventListener('click', () => { video.currentTime = parseFloat(ch.t) || 0; });
+      chapters.appendChild(b);
+    });
+    const after = renderVideoQuiz(lesson, v, 'after', v.after);
+    video.addEventListener('timeupdate', () => {
+      const t = video.currentTime;
+      let active = -1;
+      chList.forEach((ch, i) => { if (t >= (parseFloat(ch.t) || 0)) active = i; });
+      Array.prototype.forEach.call(chapters.children, (b, i) => b.classList.toggle('active', i === active));
+      if (after && !videoQState(lesson, v, 'after')){
+        const dur = v.duration_sec || video.duration || 0;
+        if (dur > 0 && t >= dur - 2) revealVideoQ(after);
+      }
+    });
+    video.addEventListener('ended', () => { if (after && !videoQState(lesson, v, 'after')) revealVideoQ(after); });
+    const videoBox = document.createElement('div');
+    videoBox.className = 'video-box';
+    videoBox.appendChild(title);
+    videoBox.appendChild(video);
+    videoBox.appendChild(chapters);
+    card.appendChild(before);
+    card.appendChild(videoBox);
+    card.appendChild(after);
+    wrap.appendChild(card);
+  });
+  return wrap;
+}
+function renderExercises(lesson){
+  const wrap = document.createElement('div');
+  wrap.className = 'exercises';
+  wrap.innerHTML = '<div class="lbl">Exercises</div>';
+  const exs = lesson.exercises || [];
+  if (!exs.length){ wrap.innerHTML += '<div class="dim">No exercises in this lesson.</div>'; return wrap; }
+  exs.forEach(ex => {
+    const card = document.createElement('div');
+    card.className = 'card ex';
+    card.innerHTML = '<div class="ex-prompt">' + inlineMd(esc(ex.prompt)) + '</div>';
+    const hintBtn = document.createElement('button');
+    hintBtn.className = 'btn';
+    hintBtn.textContent = 'Show hint';
+    const hint = document.createElement('div');
+    hint.className = 'hint';
+    hint.style.display = 'none';
+    hint.textContent = ex.hint || '';
+    hintBtn.addEventListener('click', () => {
+      const show = hint.style.display === 'none';
+      hint.style.display = show ? 'block' : 'none';
+      hintBtn.textContent = show ? 'Hide hint' : 'Show hint';
+    });
+    const solBtn = document.createElement('button');
+    solBtn.className = 'btn';
+    solBtn.textContent = 'Reveal solution';
+    const sol = document.createElement('div');
+    sol.className = 'solution';
+    sol.style.display = 'none';
+    solBtn.addEventListener('click', async () => {
+      if (sol.style.display !== 'none'){
+        sol.style.display = 'none';
+        solBtn.textContent = 'Reveal solution';
+        return;
+      }
+      solBtn.disabled = true;
+      solBtn.textContent = 'Loading…';
+      await ensureSolutions(lesson);
+      const entry = ((state.solutions[lesson.id] || {}).exercises || []).find(s => s.id === ex.id);
+      sol.textContent = entry && entry.solution ? entry.solution : 'No solution available.';
+      sol.style.display = 'block';
+      solBtn.disabled = false;
+      solBtn.textContent = 'Hide solution';
+    });
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.appendChild(hintBtn);
+    row.appendChild(solBtn);
+    card.appendChild(row);
+    card.appendChild(hint);
+    card.appendChild(sol);
+    wrap.appendChild(card);
+  });
+  return wrap;
+}
+async function ensureSolutions(lesson){
+  if (state.solutions[lesson.id]) return;
+  state.solutions[lesson.id] = await fetch(apiSolutions(state.course.id, lesson.id)).then(r => r.json());
+}
+async function openLesson(courseId, lessonId){
+  const course = courseById(courseId);
+  if (!course){ location.hash = ''; return; }
+  state.course = course;
+  state.progress = loadProgress(course.id);
+  state.solutions = {};
+  let lesson;
+  try {
+    lesson = await fetch(apiLesson(course.id, lessonId))
+      .then(r => { if (!r.ok) throw new Error('not found'); return r.json(); });
+  } catch(e){ location.hash = '#/course/' + course.id; return; }
+  state.lesson = lesson;
+  document.title = lesson.title + ' · ' + course.title;
+  const main = mainEl();
+  main.innerHTML = '';
+  const prog = state.progress.lessons[lesson.id] || {done:false, checkpoints:{}};
+  const top = document.createElement('div');
+  top.className = 'lesson-top';
+  top.innerHTML = '<a class="back" href="#/course/' + course.id + '">← Course home</a>'
+    + '<span class="badge">' + esc(lesson.kind) + '</span>';
+  const h1 = document.createElement('h1');
+  h1.textContent = lesson.title;
+  const reading = lesson.reading || {};
+  const read = document.createElement('div');
+  read.className = 'reading';
+  if (reading.url){
+    const a = document.createElement('a');
+    a.href = reading.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = 'Reading: ' + (reading.text || reading.url);
+    read.appendChild(a);
+  } else if (reading.text){
+    read.textContent = 'Reading: ' + reading.text;
+  }
+  const body = document.createElement('div');
+  body.className = 'body';
+  body.innerHTML = expandChips(mdToHtml(lesson.body || ''));
+  const audioWrap = document.createElement('div');
+  audioWrap.className = 'podcast';
+  audioWrap.style.display = 'none';
+  if (lesson.audio && lesson.audio.file){
+    audioWrap.innerHTML = '<div class="podcast-label">Lesson podcast</div>'
+      + '<audio controls preload="metadata" src="'
+      + esc(mediaAudio(course.id, lesson.audio.file))
+      + '"></audio>';
+    audioWrap.style.display = '';
+  }
+  const banner = document.createElement('div');
+  banner.id = 'lesson-banner';
+  banner.className = 'banner';
+  banner.style.display = prog.done ? 'block' : 'none';
+  banner.textContent = '✓ Lesson complete';
+  main.append(top, h1, read, audioWrap, banner, body, renderVideos(lesson), renderCheckpoints(lesson), renderExercises(lesson));
+  window.scrollTo(0, 0);
+  renderMath(main);
+  renderSidebar();
+  closeDrawer();
+}
+
+/* ---------------- popover for @def / @thm chips ---------------- */
+function openPopover(chip){
+  if (!state.lesson) return;
+  const ref = chip.dataset.ref;
+  const id = chip.dataset.id;
+  const pool = ref === 'def' ? (state.lesson.defs || []) : (state.lesson.theorems || []);
+  const item = pool.find(x => x && x.id === id);
+  if (!item) return;
+  const pop = document.getElementById('popover');
+  pop.innerHTML = '<div class="pop-card">'
+    + '<div class="pop-kind">' + (ref === 'def' ? 'Definition' : 'Theorem') + '</div>'
+    + '<div class="pop-name">' + esc(item.name || id) + '</div>'
+    + '<div class="pop-statement">' + esc(item.statement || '') + '</div>'
+    + (item.intuition ? '<div class="pop-intuition"><b>Intuition.</b> ' + esc(item.intuition) + '</div>' : '')
+    + '</div>';
+  pop.style.display = 'block';
+  const rect = chip.getBoundingClientRect();
+  const w = Math.min(440, window.innerWidth - 24);
+  let left = Math.min(rect.left, window.innerWidth - w - 12);
+  left = Math.max(12, left);
+  let top = rect.bottom + 10;
+  if (top + 240 > window.innerHeight) top = Math.max(12, rect.top - 240);
+  pop.style.width = w + 'px';
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+  renderMath(pop);
+}
+function closePopover(){ document.getElementById('popover').style.display = 'none'; }
+
+/* ---------------- drawer & routing ---------------- */
+function toggleDrawer(){
+  const narrow = window.matchMedia('(max-width: 900px)').matches;
+  if (narrow){
+    document.body.classList.toggle('drawer-open');
+    document.body.classList.remove('drawer-closed');
+  } else {
+    document.body.classList.toggle('drawer-closed');
+    document.body.classList.remove('drawer-open');
+  }
+}
+function closeDrawer(){
+  document.body.classList.remove('drawer-open');
+}
+function route(){
+  const h = location.hash;
+  let m;
+  if ((m = h.match(/^#\/course\/([^/]+)\/lesson\/([^/]+)$/))){ openLesson(m[1], m[2]); return; }
+  if ((m = h.match(/^#\/course\/([^/]+)$/))){ openCourse(m[1]); return; }
+  openCourse(null);
+}
+
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('.chip-link');
+  if (link){
+    const t = link.dataset.target;
+    if (t){
+      const el = document.getElementById(t);
+      if (el){ el.scrollIntoView({behavior:'smooth', block:'start'}); e.preventDefault(); return; }
+    }
+  }
+  const chip = e.target.closest('.chip');
+  if (chip){ openPopover(chip); e.preventDefault(); return; }
+  if (!e.target.closest('#popover')) closePopover();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePopover(); });
+document.getElementById('menu-btn').addEventListener('click', toggleDrawer);
+document.getElementById('backdrop').addEventListener('click', closeDrawer);
+window.addEventListener('hashchange', route);
+
+document.addEventListener('DOMContentLoaded', async () => {
+  loadUI();
+  await detectMode();
+  try {
+    state.courses = await fetch(apiCourses()).then(r => r.json());
+  } catch(e){ state.courses = []; }
+  if (!state.courses.length){
+    mainEl().innerHTML = '<div class="loading">No courses found on this server.</div>';
+    return;
+  }
+  if (!location.hash) location.hash = '#/course/' + state.courses[0].id;
+  route();
+});
+</script>
+</body>
+</html>

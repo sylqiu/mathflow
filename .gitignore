@@ -22,3 +22,17 @@ DEEPSEEK_API_KEY*
 
 # 本地日志
 *.log
+
+# Virtual envs
+.venv-tts/
+
+# Course content — lives in separate repo (mathflow-content), not committed here
+/data/
+/media/
+/demo/
+
+# Local agent memory
+/memory/
+
+# Backups
+*.bak
