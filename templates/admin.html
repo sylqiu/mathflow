@@ -139,6 +139,11 @@
   .comment-text { font-size:13.5px; }
   .comment-at { font-size:11px; color:var(--dim); }
   .comment-input { flex:1; min-width:180px; }
+  .deep-jump { animation:deep-jump-pulse 2s ease-out 0s 1; border-radius:8px; }
+  @keyframes deep-jump-pulse {
+    0% { box-shadow:0 0 0 3px var(--amber); }
+    100% { box-shadow:0 0 0 3px rgba(255,180,80,0); }
+  }
 </style>
 </head>
 <body>
@@ -659,7 +664,7 @@ function warnList(warnings){
 }
 
 /* ---------------- lesson editor ---------------- */
-async function viewLesson(courseId, lid){
+async function viewLesson(courseId, lid, jump){
   mainEl().innerHTML = '<div class="loading">Loading lesson…</div>';
   try {
     const [lesson, manifest] = await Promise.all([
@@ -669,12 +674,12 @@ async function viewLesson(courseId, lid){
     state.lesson = lesson;
     state.manifest = manifest;
     state.courseId = courseId;
-    renderLesson(lid);
+    renderLesson(lid, jump);
   } catch (err){
     mainEl().innerHTML = '<div class="err-box">' + esc(err.message) + '</div>';
   }
 }
-function renderLesson(lid){
+function renderLesson(lid, jump){
   const L = state.lesson;
   const moduleIds = (state.manifest.modules || []).map(m => m.id).filter(Boolean);
   if (L.module && moduleIds.indexOf(L.module) < 0) moduleIds.unshift(L.module);
@@ -682,7 +687,11 @@ function renderLesson(lid){
   mainEl().innerHTML = '<a class="back" href="#/course/' + encodeURIComponent(state.courseId) + '">← Back to course</a>'
     + '<div class="lesson-top"><div class="t"><div class="h1">' + esc(L.title || lid) + '</div>'
     + '<p class="sub">Lesson <code class="mono">' + esc(lid) + '</code> in course <code class="mono">' + esc(state.courseId) + '</code></p></div>'
-    + '<button class="btn danger" type="button" data-act="del-lesson-file" data-lid="' + esc(lid) + '">Delete lesson</button></div>'
+    + '<div class="row">'
+    + '<button class="btn" type="button" data-act="review-lesson" data-lid="' + esc(lid) + '">Review this lesson</button>'
+    + '<button class="btn danger" type="button" data-act="del-lesson-file" data-lid="' + esc(lid) + '">Delete lesson</button>'
+    + '</div></div>'
+    + '<div id="ls-reviews"></div>'
     + '<div class="card"><div class="form-grid">'
     + '<div><label>ID (readonly)</label><input type="text" value="' + esc(L.id) + '" disabled></div>'
     + '<div><label>Module</label><select id="ls-module">' + moduleOpts + '</select></div>'
@@ -704,6 +713,45 @@ function renderLesson(lid){
     state.previewTimer = setTimeout(() => renderPreview(mdToHtml(body.value)), 180);
   });
   renderPreview(mdToHtml(body.value));
+  loadLessonReviews(state.courseId, lid);
+  if (jump && jump.section) applyDeepJump(jump);
+}
+
+/* Reviews that target this lesson (best-effort; failures never break the page). */
+async function loadLessonReviews(courseId, lid){
+  const box = $('#ls-reviews');
+  if (!box) return;
+  let list;
+  try {
+    list = await api(apiBase + '/courses/' + encodeURIComponent(courseId) + '/lessons/' + encodeURIComponent(lid) + '/reviews');
+  } catch (err){ return; }
+  if (!box.isConnected || !list || !list.length) return;
+  const chips = list.map(r =>
+    '<a class="badge" href="#/review/' + encodeURIComponent(r.id) + '">'
+    + esc(r.title || r.id) + ' (' + esc(r.kind || '') + ') · decided ' + r.decided_count + '/' + r.block_count + '</a>'
+  ).join(' ');
+  box.innerHTML = '<div class="row" style="margin-bottom:14px"><span class="dim">'
+    + list.length + ' open review' + (list.length === 1 ? '' : 's') + '</span> ' + chips + '</div>';
+}
+
+/* Scroll the deep-linked anchor into view and highlight it for ~2s. */
+function applyDeepJump(jump){
+  const section = jump.section, item = jump.item || '';
+  let el = null;
+  if (section === 'body'){
+    const n = parseInt(String(item).replace(/^h/, ''), 10);
+    const preview = $('#lesson-preview');
+    const headings = preview ? preview.querySelectorAll('h2, h3') : [];
+    if (n >= 1 && n <= headings.length) el = headings[n - 1];
+  } else if (['defs', 'theorems', 'checkpoints', 'exercises'].indexOf(section) >= 0){
+    el = $('#json-' + section);
+  }
+  if (!el) return;
+  el.scrollIntoView({ behavior:'smooth', block:'center' });
+  el.classList.remove('deep-jump');
+  void el.offsetWidth;
+  el.classList.add('deep-jump');
+  setTimeout(() => el.classList.remove('deep-jump'), 2200);
 }
 function jsonSectionHtml(name, label, L){
   const val = L[name] || [];
@@ -759,6 +807,7 @@ function collectLesson(){
 const actions = {
   'validate-course': (el) => { location.hash = '#/course/' + encodeURIComponent(el.dataset.id); },
   'open-lesson': (el) => { location.hash = '#/course/' + encodeURIComponent(state.courseId) + '/lesson/' + encodeURIComponent(el.dataset.lid); },
+  'review-lesson': (el) => { location.hash = '#/reviews/new?from=' + encodeURIComponent(state.courseId) + '/' + encodeURIComponent(el.dataset.lid); },
   'del-course': async (el) => {
     const id = el.dataset.id;
     const typed = prompt('Delete course "' + id + '"? It will be moved to the server trash. Type the course id to confirm:', '');
@@ -1032,7 +1081,56 @@ function reviewCard(r){
 }
 
 /* ---------------- reviews: new ---------------- */
-function viewReviewNew(){
+/* Parse an optional "from=<course>/<lesson>" query out of the hash. */
+function parseFromParam(h){
+  const q = h.indexOf('?');
+  if (q < 0) return null;
+  let from = null;
+  try { from = new URLSearchParams(h.slice(q + 1)).get('from'); } catch (e){ return null; }
+  if (!from) return null;
+  const i = from.indexOf('/');
+  if (i <= 0 || i === from.length - 1) return null;
+  return { course: from.slice(0, i), lesson: from.slice(i + 1) };
+}
+function nrCardHtml(b){
+  const sec = b.anchor && b.anchor.section ? '<span class="badge">' + esc(anchorSectionLabel(b.anchor.section)) + '</span>' : '';
+  return '<div class="card review-block" data-bidx="' + esc(b.id) + '">'
+    + '<div class="review-block-head"><span class="review-block-title">' + esc(b.title || b.id) + '</span>' + sec + '</div>'
+    + '<div class="block-text preview" style="min-height:0">' + mdToHtml(b.text || '') + '</div>'
+    + '<label>Edit text</label>'
+    + '<textarea class="mono nr-block-text" rows="6" spellcheck="false">' + esc(b.text || '') + '</textarea>'
+    + '</div>';
+}
+/* Blocks from whichever editor is active: draft cards, else the manual JSON textarea. */
+function nrCollectBlocks(){
+  if (state.nrBlocks){
+    const areas = document.querySelectorAll('.nr-block-text');
+    return { ok:true, value: state.nrBlocks.map((b, i) => ({
+      id: b.id,
+      title: b.title || '',
+      text: areas[i] ? areas[i].value : (b.text || ''),
+      anchor: b.anchor,
+    })) };
+  }
+  const el = $('#nr-blocks');
+  const text = el ? el.value.trim() : '';
+  if (!text) return { ok:true, value:[] };
+  return parseJsonArr(text, 'blocks');
+}
+function nrRenderPreview(){
+  const pv = $('#nr-preview');
+  if (!pv) return;
+  const r = nrCollectBlocks();
+  if (!r.ok){ pv.innerHTML = '<p class="dim">Preview unavailable: ' + esc(r.error) + '</p>'; return; }
+  const html = r.value.map(b => (b && b.title ? '<div class="lbl">' + esc(b.title) + '</div>' : '') + mdToHtml(b && b.text ? b.text : '')).join('');
+  pv.innerHTML = html || '<p class="dim">Nothing to preview yet.</p>';
+  renderMath(pv);
+}
+function nrSchedulePreview(){
+  clearTimeout(state.nrPreviewTimer);
+  state.nrPreviewTimer = setTimeout(nrRenderPreview, 300);
+}
+function viewReviewNew(from){
   mainEl().innerHTML = '<a class="back" href="#/reviews">← Back to reviews</a>'
     + '<div class="h1">New Review</div>'
     + '<p class="sub">Blocks are the proposal items (paragraphs, lessons, module plans) the owner will mark do / don’t / revise and comment on.</p>'
@@ -1043,25 +1141,40 @@ function viewReviewNew(){
     + '<input type="text" id="nr-title" placeholder="M5 PRF/GGM — directory structure draft (v1)" autocomplete="off">'
     + '<label>Kind</label>'
     + '<select id="nr-kind">' + REVIEW_KINDS.map(k => '<option value="' + k + '">' + REVIEW_KIND_LABEL[k] + '</option>').join('') + '</select>'
-    + '<label>Blocks (JSON array of {id, title, text})</label>'
-    + '<textarea id="nr-blocks" class="mono" rows="12" spellcheck="false" placeholder=\'[{"id":"b1","title":"Module split","text":"Proposal content here…"}]\'></textarea>'
+    + '<div id="nr-target"></div>'
+    + '<label id="nr-blocks-label">Blocks (JSON array of {id, title, text})</label>'
+    + '<div id="nr-blocks-wrap"></div>'
+    + '<label style="margin-top:14px">Live preview</label>'
+    + '<div class="preview" id="nr-preview" style="min-height:120px"></div>'
     + '<div class="row"><button class="btn" type="button" id="nr-format">Format</button>'
     + '<button class="btn primary" type="button" id="nr-submit">Create Review</button>'
     + '<span class="status" id="nr-status"></span></div>'
     + '</div>';
+  state.nrBlocks = null;
+  state.nrTarget = null;
+  const showManual = () => {
+    state.nrBlocks = null;
+    state.nrTarget = null;
+    $('#nr-blocks-label').textContent = 'Blocks (JSON array of {id, title, text})';
+    $('#nr-blocks-wrap').innerHTML = '<textarea id="nr-blocks" class="mono" rows="12" spellcheck="false" placeholder=\'[{"id":"b1","title":"Module split","text":"Proposal content here…"}]\'></textarea>';
+    $('#nr-format').style.display = '';
+    nrRenderPreview();
+  };
   $('#nr-format').onclick = () => {
     const st = $('#nr-status');
     const r = parseJsonArr($('#nr-blocks').value, 'blocks');
     if (!r.ok){ st.textContent = 'Blocks: ' + r.error; st.className = 'status err'; return; }
     $('#nr-blocks').value = JSON.stringify(r.value, null, 2);
     st.textContent = 'Formatted ✓'; st.className = 'status ok';
+    nrRenderPreview();
   };
+  $('#nr-blocks-wrap').addEventListener('input', nrSchedulePreview);
   $('#nr-submit').onclick = async () => {
     const st = $('#nr-status'), btn = $('#nr-submit');
     const id = $('#nr-id').value.trim();
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)){ st.textContent = 'Invalid id.'; st.className = 'status err'; return; }
     if (!$('#nr-title').value.trim()){ st.textContent = 'Title is required.'; st.className = 'status err'; return; }
-    const parsed = parseJsonArr($('#nr-blocks').value, 'blocks');
+    const parsed = nrCollectBlocks();
     if (!parsed.ok){ st.textContent = 'Blocks: ' + parsed.error; st.className = 'status err'; return; }
     const seen = new Set();
     for (const b of parsed.value){
@@ -1071,20 +1184,44 @@ function viewReviewNew(){
       seen.add(b.id);
       if (typeof b.text !== 'string'){ st.textContent = 'Block "' + b.id + '" is missing text.'; st.className = 'status err'; return; }
     }
+    const body = { id: id, title: $('#nr-title').value.trim(), kind: $('#nr-kind').value, blocks: parsed.value };
+    if (state.nrTarget) body.target = state.nrTarget;
     btn.disabled = true;
     st.textContent = 'Creating…'; st.className = 'status';
     try {
-      const doc = await postJson(apiBase + '/reviews', {
-        id: id,
-        title: $('#nr-title').value.trim(),
-        kind: $('#nr-kind').value,
-        blocks: parsed.value,
-      });
+      const doc = await postJson(apiBase + '/reviews', body);
       location.hash = '#/review/' + encodeURIComponent(doc.id);
     } catch (err){
       st.textContent = err.message; st.className = 'status err'; btn.disabled = false;
     }
   };
+  if (!from){ showManual(); return; }
+  $('#nr-blocks-label').textContent = 'Blocks (snapshot from lesson)';
+  $('#nr-format').style.display = 'none';
+  $('#nr-blocks-wrap').innerHTML = '<div class="loading">Building draft from lesson…</div>';
+  (async () => {
+    let draft;
+    try {
+      draft = await postJson(apiBase + '/courses/' + encodeURIComponent(from.course) + '/lessons/' + encodeURIComponent(from.lesson) + '/review-draft', {});
+    } catch (err){
+      const st = $('#nr-status');
+      if (st){ st.textContent = err.message; st.className = 'status err'; }
+      $('#nr-blocks-wrap').innerHTML = '<p class="dim">Could not build a draft from this lesson.</p>';
+      return;
+    }
+    state.nrBlocks = draft.blocks || [];
+    state.nrTarget = draft.target || null;
+    $('#nr-title').value = draft.title || '';
+    if (draft.kind) $('#nr-kind').value = draft.kind;
+    if (state.nrTarget){
+      $('#nr-target').innerHTML = '<label>Target lesson</label><p class="dim">'
+        + esc(state.nrTarget.course) + '/' + esc(state.nrTarget.lesson) + '</p>';
+    }
+    $('#nr-blocks-wrap').innerHTML = state.nrBlocks.map(nrCardHtml).join('')
+      || '<p class="dim">This lesson has no reviewable content.</p>';
+    $('#nr-blocks-wrap').querySelectorAll('.block-text.preview').forEach(el => renderMath(el));
+    nrRenderPreview();
+  })();
 }
 
 /* ---------------- reviews: detail ---------------- */
@@ -1104,10 +1241,16 @@ async function viewReview(id){
 function renderReview(){
   const r = state.review;
   const isDone = r.status === 'done';
+  const t = r.target;
+  const targetLine = t
+    ? '<p class="sub">Lesson: ' + esc(t.course) + '/' + esc(t.lesson)
+      + ' · <a href="#/course/' + encodeURIComponent(t.course) + '/lesson/' + encodeURIComponent(t.lesson) + '">Open lesson ↗</a></p>'
+    : '';
   mainEl().innerHTML = '<a class="back" href="#/reviews">← Back to reviews</a>'
     + '<div class="card"><div class="lesson-top"><div class="t"><div class="h1">' + esc(r.title || r.id) + '</div>'
     + '<p class="sub">' + esc(r.id) + ' · <span class="badge">' + esc(r.kind || '') + '</span>'
-    + reviewStatusBadge(r.status) + ' · updated ' + fmtWhen(r.updated_at) + '</p></div>'
+    + reviewStatusBadge(r.status) + ' · updated ' + fmtWhen(r.updated_at) + '</p>'
+    + targetLine + '</div>'
     + '<div class="row">'
     + (isDone
         ? '<button class="btn" type="button" data-act="review-status" data-status="open">Reopen</button>'
@@ -1127,8 +1270,30 @@ function renderReview(){
     };
   });
 }
+function anchorSectionLabel(section){
+  const map = { defs:'defs', theorems:'thm', checkpoints:'cp', exercises:'ex', body:'body' };
+  return map[section] || section || '';
+}
+function reviewAnchorHtml(b){
+  const a = b.anchor;
+  if (!a || typeof a !== 'object') return '';
+  let html = ' <span class="badge">' + esc(anchorSectionLabel(a.section)) + '</span>';
+  const t = state.review && state.review.target;
+  if (t){
+    const href = '#/course/' + encodeURIComponent(t.course) + '/lesson/' + encodeURIComponent(t.lesson)
+      + '@' + a.section + ':' + a.item;
+    html += ' <a class="btn small" href="' + esc(href) + '">jump</a>';
+  }
+  if (b.anchor_status === 'stale'){
+    html += ' <span class="badge warn">⚠ lesson changed since this review was captured</span>';
+  } else if (b.anchor_status === 'missing'){
+    html += ' <span class="badge err">⚠ anchor no longer resolves</span>';
+  }
+  return html;
+}
 function reviewBlockHtml(b){
   const decision = b.decision || '';
+  const anchorHtml = reviewAnchorHtml(b);
   const decBtns = [['do', '✅ Do'], ['dont', '❌ Don\'t'], ['revise', '✏️ Revise']].map(pair => {
     const val = pair[0], label = pair[1];
     return '<button class="btn small' + (decision === val ? ' active dec-' + val : '') + '" type="button"'
@@ -1143,6 +1308,7 @@ function reviewBlockHtml(b){
   return '<div class="card review-block">'
     + '<div class="review-block-head"><span class="review-block-title">' + esc(b.title || b.id || 'Block') + '</span>'
     + (decision ? ' <span class="badge dec-' + decision + '">' + DEC_LABEL[decision] + '</span>' : '')
+    + anchorHtml
     + '</div>'
     + '<div class="block-text preview" style="min-height:0">' + mdToHtml(b.text) + '</div>'
     + '<div class="lbl">Decision</div>'
@@ -1157,15 +1323,19 @@ function reviewBlockHtml(b){
 /* ---------------- router ---------------- */
 function route(){
   const h = location.hash.replace(/^#/, '') || '/';
-  const ml = h.match(/^\/course\/([^/]+)\/lesson\/([^/]+)$/);
-  if (ml){ viewLesson(decodeURIComponent(ml[1]), decodeURIComponent(ml[2])); return; }
+  const ml = h.match(/^\/course\/([^/]+)\/lesson\/([^/@]+)(?:@([^:]+):(.+))?$/);
+  if (ml){
+    const jump = ml[3] ? { section: ml[3], item: ml[4] } : null;
+    viewLesson(decodeURIComponent(ml[1]), decodeURIComponent(ml[2]), jump);
+    return;
+  }
   const mc = h.match(/^\/course\/([^/]+)$/);
   if (mc){ state.tab = 'lessons'; viewCourse(decodeURIComponent(mc[1])); return; }
   if (h === '/new'){ viewNew(); return; }
   if (h === '/import'){ viewImport(); return; }
   const rr = h.match(/^\/review\/([^/]+)$/);
   if (rr){ viewReview(decodeURIComponent(rr[1])); return; }
-  if (h === '/reviews/new'){ viewReviewNew(); return; }
+  if (h === '/reviews/new' || h.indexOf('/reviews/new?') === 0){ viewReviewNew(parseFromParam(h)); return; }
   if (h === '/reviews'){ viewReviews(); return; }
   viewHome();
 }

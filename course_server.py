@@ -30,6 +30,8 @@ API:
   GET/PUT/DELETE /api/admin/reviews/<id>                 -> read/update/delete a review document
   POST /api/admin/reviews/<id>/blocks/<bid>/comments     -> add a comment anchored to a block
   PUT /api/admin/reviews/<id>/blocks/<bid>/decision      -> set/clear a block decision
+  POST /api/admin/courses/<id>/lessons/<lid>/review-draft -> non-persisted draft from a lesson
+  GET  /api/admin/courses/<id>/lessons/<lid>/reviews     -> reviews targeting a lesson
 
 Run:
   python3 course_server.py 8788
@@ -37,6 +39,7 @@ Stdlib only (Python 3.9+). English only. No git commits.
 """
 
 import datetime
+import hashlib
 import hmac
 import io
 import json
@@ -63,6 +66,8 @@ SAFE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 KIND_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 REVIEW_KINDS = ("plan", "lesson-draft", "course-draft")
 REVIEW_DECISIONS = ("do", "dont", "revise")
+# Sections a review block anchor may point at.
+ANCHOR_SECTIONS = ("defs", "theorems", "checkpoints", "exercises", "body")
 ADMIN_TOKEN = os.environ.get("MATHFLOW_ADMIN_TOKEN") or None
 
 sys.path.insert(0, str(BASE_DIR))
@@ -325,6 +330,143 @@ def _now_iso():
     return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
 
+def _split_body_sections(body):
+    """Ordered [(title, text)] for markdown body sections (## / ### headings).
+
+    A section starts at a line matching '^## ' or '^### '; its text is the
+    lines up to (not including) the next heading. Content before the first
+    heading is ignored. Deterministic: same input -> same order.
+    """
+    if not isinstance(body, str):
+        return []
+    sections = []
+    cur_title = None
+    cur_lines = []
+    for line in body.split("\n"):
+        m = re.match(r"^#{2,3} (.*)$", line)
+        if m:
+            if cur_title is not None:
+                sections.append((cur_title, "\n".join(cur_lines)))
+            cur_title = m.group(1).strip()
+            cur_lines = []
+        elif cur_title is not None:
+            cur_lines.append(line)
+    if cur_title is not None:
+        sections.append((cur_title, "\n".join(cur_lines)))
+    return sections
+
+
+def _anchor_shape_ok(anchor):
+    """True when anchor is a dict with a usable {section, item} shape."""
+    if not isinstance(anchor, dict):
+        return False
+    section = anchor.get("section")
+    item = anchor.get("item")
+    if not isinstance(section, str) or section not in ANCHOR_SECTIONS:
+        return False
+    return isinstance(item, str)
+
+
+def _anchor_clean(anchor):
+    """Return a normalized anchor dict, or None when the shape is not usable."""
+    if not _anchor_shape_ok(anchor):
+        return None
+    out = {"section": anchor["section"], "item": anchor["item"]}
+    if isinstance(anchor.get("hash"), str):
+        out["hash"] = anchor["hash"]
+    return out
+
+
+def _target_clean(target):
+    """Return a normalized {course, lesson} target, or None when unusable."""
+    if not isinstance(target, dict):
+        return None
+    course = target.get("course")
+    lesson = target.get("lesson")
+    if not isinstance(course, str) or not isinstance(lesson, str):
+        return None
+    if not SAFE_ID_RE.match(course) or not SAFE_ID_RE.match(lesson):
+        return None
+    return {"course": course, "lesson": lesson}
+
+
+def _lesson_snippet(lesson, anchor):
+    """Canonical snippet a block stands for, or None if it does not resolve.
+
+    Capture and drift-check both go through this function so hashes agree.
+    """
+    if not isinstance(lesson, dict) or not _anchor_shape_ok(anchor):
+        return None
+    section = anchor["section"]
+    item = anchor["item"]
+    if not SAFE_ID_RE.match(item):
+        return None
+    if section == "defs":
+        for d in lesson.get("defs") or []:
+            if isinstance(d, dict) and d.get("id") == item and isinstance(d.get("statement"), str):
+                return d["statement"]
+        return None
+    if section == "theorems":
+        for t in lesson.get("theorems") or []:
+            if not isinstance(t, dict) or t.get("id") != item or not isinstance(t.get("statement"), str):
+                continue
+            text = t["statement"]
+            if isinstance(t.get("proof"), str) and t["proof"]:
+                text += "\n\n" + t["proof"]
+            return text
+        return None
+    if section == "exercises":
+        for ex in lesson.get("exercises") or []:
+            if not isinstance(ex, dict) or ex.get("id") != item or not isinstance(ex.get("prompt"), str):
+                continue
+            text = ex["prompt"]
+            if isinstance(ex.get("hint"), str) and ex["hint"]:
+                text += "\n\n" + ex["hint"]
+            return text
+        return None
+    if section == "checkpoints":
+        for cp in lesson.get("checkpoints") or []:
+            if not isinstance(cp, dict) or cp.get("qid") != item or not isinstance(cp.get("question"), str):
+                continue
+            text = cp["question"]
+            options = [o.get("text", "") for o in (cp.get("options") or []) if isinstance(o, dict)]
+            if options:
+                numbered = "\n".join(f"{i}. {opt}" for i, opt in enumerate(options, 1))
+                text += "\n\n" + numbered
+            return text
+        return None
+    if section == "body":
+        try:
+            idx = int(item.lstrip("h"))
+        except ValueError:
+            return None
+        sections = _split_body_sections(lesson.get("body"))
+        if idx < 1 or idx > len(sections):
+            return None
+        return sections[idx - 1][1]
+    return None
+
+
+def _snippet_hash(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _review_anchor_status(block, lesson):
+    """One of: unanchored | fresh | stale | missing."""
+    anchor = block.get("anchor") if isinstance(block, dict) else None
+    if not _anchor_shape_ok(anchor):
+        return "unanchored"
+    if lesson is None:
+        return "missing"
+    current = _lesson_snippet(lesson, anchor)
+    if current is None:
+        return "missing"
+    stored = anchor.get("hash")
+    if isinstance(stored, str):
+        return "fresh" if stored == _snippet_hash(current) else "stale"
+    return "fresh"
+
+
 def _review_path(review_id):
     if not SAFE_ID_RE.match(review_id or ""):
         return None
@@ -376,14 +518,18 @@ def _normalize_review(raw):
             bid = b.get("id")
             comments = b.get("comments")
             comments = [c for c in comments if isinstance(c, dict)] if isinstance(comments, list) else []
-            blocks.append({
+            block = {
                 "id": bid if isinstance(bid, str) else "",
                 "title": b.get("title") if isinstance(b.get("title"), str) else "",
                 "text": b.get("text") if isinstance(b.get("text"), str) else "",
                 "decision": b.get("decision") if b.get("decision") in REVIEW_DECISIONS else None,
                 "comments": comments,
-            })
-    return {
+            }
+            anchor = _anchor_clean(b.get("anchor"))
+            if anchor is not None:
+                block["anchor"] = anchor
+            blocks.append(block)
+    doc = {
         "id": rid,
         "title": title if isinstance(title, str) else "",
         "kind": kind if isinstance(kind, str) and kind else "plan",
@@ -392,6 +538,10 @@ def _normalize_review(raw):
         "updated_at": raw.get("updated_at") if isinstance(raw.get("updated_at"), str) else now,
         "blocks": blocks,
     }
+    target = _target_clean(raw.get("target"))
+    if target is not None:
+        doc["target"] = target
+    return doc
 
 
 def _load_review(review_id):
@@ -405,7 +555,7 @@ def _review_summary(doc):
     blocks = doc.get("blocks") or []
     decided = sum(1 for b in blocks if b.get("decision") in REVIEW_DECISIONS)
     comment_count = sum(len(b.get("comments") or []) for b in blocks)
-    return {
+    summary = {
         "id": doc.get("id", ""),
         "title": doc.get("title", ""),
         "kind": doc.get("kind", ""),
@@ -415,6 +565,10 @@ def _review_summary(doc):
         "decided_count": decided,
         "comment_count": comment_count,
     }
+    target = _target_clean(doc.get("target"))
+    if target is not None:
+        summary["target"] = target
+    return summary
 
 
 def _review_list():
@@ -429,6 +583,61 @@ def _review_block(doc, block_id):
         if b.get("id") == block_id:
             return b
     return None
+
+
+def _reviews_for_lesson(course_id, lesson_id):
+    """Summaries of reviews targeting a lesson, newest updated_at first."""
+    out = []
+    for rid in _review_ids():
+        doc = _load_review(rid)
+        if doc is None:
+            continue
+        summary = _review_summary(doc)
+        target = summary.get("target")
+        if target and target.get("course") == course_id and target.get("lesson") == lesson_id:
+            out.append(summary)
+    out.sort(key=lambda r: r["updated_at"], reverse=True)
+    return out
+
+
+def _review_draft_blocks(lesson):
+    """Non-persisted review blocks snapshotting a lesson (never mutates it).
+
+    Text + hash for every block come from _lesson_snippet so capture and the
+    later drift check always agree.
+    """
+    blocks = []
+
+    def add(title, anchor):
+        text = _lesson_snippet(lesson, anchor)
+        if text is None:
+            return
+        anchor = dict(anchor, hash=_snippet_hash(text))
+        blocks.append({"id": f"b{len(blocks) + 1}", "title": title, "text": text, "anchor": anchor})
+
+    for i, (title, _text) in enumerate(_split_body_sections(lesson.get("body")), start=1):
+        add(title, {"section": "body", "item": f"h{i}"})
+    for d in lesson.get("defs") or []:
+        if not isinstance(d, dict) or not isinstance(d.get("id"), str):
+            continue
+        name = d.get("name") if isinstance(d.get("name"), str) else d["id"]
+        add("def: " + name, {"section": "defs", "item": d["id"]})
+    for t in lesson.get("theorems") or []:
+        if not isinstance(t, dict) or not isinstance(t.get("id"), str):
+            continue
+        name = t.get("name") if isinstance(t.get("name"), str) else t["id"]
+        add("thm: " + name, {"section": "theorems", "item": t["id"]})
+    for cp in lesson.get("checkpoints") or []:
+        if not isinstance(cp, dict) or not isinstance(cp.get("qid"), str):
+            continue
+        question = cp.get("question") if isinstance(cp.get("question"), str) else ""
+        add("cp: " + question[:60], {"section": "checkpoints", "item": cp["qid"]})
+    for ex in lesson.get("exercises") or []:
+        if not isinstance(ex, dict) or not isinstance(ex.get("id"), str):
+            continue
+        prompt = ex.get("prompt") if isinstance(ex.get("prompt"), str) else ""
+        add("ex: " + prompt[:60], {"section": "exercises", "item": ex["id"]})
+    return blocks
 
 
 def _manifest_check(course_id, manifest):
@@ -640,6 +849,14 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send_json(_media_list(m.group(1)))
             return True
+        m = re.match(r"^/api/admin/courses/([^/]+)/lessons/([^/]+)/reviews$", path)
+        if m:
+            cid, lid = m.group(1), m.group(2)
+            if _load_lesson(cid, lid) is None:
+                self._send_json({"error": "unknown lesson"}, 404)
+            else:
+                self._send_json(_reviews_for_lesson(cid, lid))
+            return True
         m = re.match(r"^/api/admin/reviews$", path)
         if m:
             self._send_json(_review_list())
@@ -651,6 +868,12 @@ class Handler(BaseHTTPRequestHandler):
             if doc is None:
                 self._send_json({"error": "unknown review"}, 404)
             else:
+                target = doc.get("target")
+                lesson = _load_lesson(target["course"], target["lesson"]) if target else None
+                for b in doc.get("blocks") or []:
+                    b["anchor_status"] = (
+                        _review_anchor_status(b, lesson) if target else "unanchored"
+                    )
                 self._send_json(doc)
             return True
         return False
@@ -699,6 +922,21 @@ class Handler(BaseHTTPRequestHandler):
                 json.dumps(skeleton, indent=2) + "\n", encoding="utf-8")
             self._send_json(skeleton, 201)
             return True
+        m = re.match(r"^/api/admin/courses/([^/]+)/lessons/([^/]+)/review-draft$", path)
+        if m:
+            cid, lid = m.group(1), m.group(2)
+            lesson = _load_lesson(cid, lid)
+            if lesson is None:
+                self._send_json({"error": "unknown lesson"}, 404)
+                return True
+            title = lesson.get("title") if isinstance(lesson.get("title"), str) else lid
+            self._send_json({
+                "title": "Review: " + title,
+                "kind": "lesson-draft",
+                "target": {"course": cid, "lesson": lid},
+                "blocks": _review_draft_blocks(lesson),
+            })
+            return True
         m = re.match(r"^/api/admin/reviews$", path)
         if m:
             rid = data.get("id")
@@ -714,6 +952,12 @@ class Handler(BaseHTTPRequestHandler):
                 title = ""
             if not isinstance(kind, str) or not kind:
                 kind = "plan"
+            target = None
+            if data.get("target") is not None:
+                target = _target_clean(data.get("target"))
+                if target is None or _load_lesson(target["course"], target["lesson"]) is None:
+                    self._send_json({"error": "unknown target lesson"}, 400)
+                    return True
             raw_blocks = data.get("blocks")
             if not isinstance(raw_blocks, list):
                 self._send_json({"error": "blocks must be an array of {id, title, text}"}, 400)
@@ -733,13 +977,20 @@ class Handler(BaseHTTPRequestHandler):
                 seen.add(bid)
                 btitle = b.get("title")
                 btext = b.get("text")
-                blocks.append({
+                block = {
                     "id": bid,
                     "title": btitle if isinstance(btitle, str) else "",
                     "text": btext if isinstance(btext, str) else "",
                     "decision": None,
                     "comments": [],
-                })
+                }
+                if b.get("anchor") is not None:
+                    anchor = _anchor_clean(b.get("anchor"))
+                    if anchor is None:
+                        self._send_json({"error": "invalid anchor"}, 400)
+                        return True
+                    block["anchor"] = anchor
+                blocks.append(block)
             now = _now_iso()
             doc = {
                 "id": rid,
@@ -750,6 +1001,8 @@ class Handler(BaseHTTPRequestHandler):
                 "updated_at": now,
                 "blocks": blocks,
             }
+            if target is not None:
+                doc["target"] = target
             REVIEWS_DIR.mkdir(parents=True, exist_ok=True)
             _write_json_atomic(_review_path(rid), doc)
             self._send_json(doc, 201)
@@ -1088,6 +1341,7 @@ class Handler(BaseHTTPRequestHandler):
             is_json_post = (
                 path == "/api/admin/courses"
                 or bool(re.match(r"^/api/admin/courses/[^/]+/lessons$", path))
+                or bool(re.match(r"^/api/admin/courses/[^/]+/lessons/[^/]+/review-draft$", path))
                 or bool(re.match(r"^/api/admin/reviews$", path))
                 or bool(re.match(r"^/api/admin/reviews/[^/]+/blocks/[^/]+/comments$", path))
             )
